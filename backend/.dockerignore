@@ -1,0 +1,10 @@
+.git
+*.md
+.env
+.env.*
+uploads
+api
+*.log
+.DS_Store
+*.test.go
+*_test.go
