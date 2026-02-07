@@ -1,13 +1,24 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { activityApi, ActivityLog } from '@/lib/api';
 import Loader from '@/components/Loader';
-import { Activity, RefreshCw } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+
+function formatDetails(details: string | undefined): string {
+  if (!details || !details.trim()) return '—';
+  try {
+    const o = JSON.parse(details);
+    return JSON.stringify(o, null, 2);
+  } catch {
+    return details;
+  }
+}
 
 export default function ActivityPage() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadLogs = useCallback(() => {
     setLoading(true);
@@ -29,6 +40,10 @@ export default function ActivityPage() {
   const handleRefresh = () => {
     setRefreshing(true);
     loadLogs();
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
   };
 
   if (loading && logs.length === 0) return <Loader variant="page" message="Loading activity…" />;
@@ -53,31 +68,90 @@ export default function ActivityPage() {
         {logs.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
             <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>No activity yet. API requests will appear here.</p>
+            <p>No activity yet. API requests and audit events will appear here.</p>
           </div>
         ) : (
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="w-9 px-2 py-3" aria-label="Expand" />
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Time</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">User</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Action</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Description</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">IP</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                    {new Date(log.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-800">
-                    {log.user ? `${log.user.name || log.user.email}` : log.user_id}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-sm text-gray-700">{log.action}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{log.ip_address || '—'}</td>
-                </tr>
-              ))}
+              {logs.map((log) => {
+                const isExpanded = expandedId === log.id;
+                const hasDetails = log.details?.trim() || log.entity_type || log.entity_id || log.action;
+                return (
+                  <React.Fragment key={log.id}>
+                    <tr
+                      key={log.id}
+                      className={`hover:bg-gray-50 ${hasDetails ? 'cursor-pointer' : ''}`}
+                      onClick={() => hasDetails && toggleExpand(log.id)}
+                      role={hasDetails ? 'button' : undefined}
+                      tabIndex={hasDetails ? 0 : undefined}
+                      onKeyDown={(e) => hasDetails && (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggleExpand(log.id))}
+                    >
+                      <td className="w-9 px-2 py-3 text-gray-400">
+                        {hasDetails ? (
+                          isExpanded ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {log.user ? `${log.user.name || log.user.email}` : log.user_id}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        {log.description || log.action}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{log.ip_address || '—'}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-gray-50/80">
+                        <td colSpan={5} className="px-4 py-3">
+                          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm space-y-2">
+                            <div className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+                              <span className="text-gray-500 font-medium">Action (API):</span>
+                              <span className="font-mono text-gray-800">{log.action}</span>
+                              {log.entity_type && (
+                                <>
+                                  <span className="text-gray-500 font-medium">Entity type:</span>
+                                  <span className="text-gray-800">{log.entity_type}</span>
+                                </>
+                              )}
+                              {log.entity_id && (
+                                <>
+                                  <span className="text-gray-500 font-medium">Entity ID:</span>
+                                  <span className="font-mono text-gray-800">{log.entity_id}</span>
+                                </>
+                              )}
+                              <span className="text-gray-500 font-medium">IP address:</span>
+                              <span className="text-gray-800">{log.ip_address || '—'}</span>
+                            </div>
+                            {log.details?.trim() && (
+                              <div>
+                                <span className="text-gray-500 font-medium block mb-1">Changes / details:</span>
+                                <pre className="bg-gray-100 rounded p-3 text-gray-800 overflow-x-auto font-mono text-xs whitespace-pre-wrap break-words">
+                                  {formatDetails(log.details)}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}

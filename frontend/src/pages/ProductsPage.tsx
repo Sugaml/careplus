@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { productApi, categoryApi, productUnitApi, Product, ProductImage, ApiError, resolveImageUrl } from '@/lib/api';
+import { productApi, categoryApi, productUnitApi, inventoryApi, Product, ProductImage, ApiError, resolveImageUrl } from '@/lib/api';
 
 // QR and barcode via image APIs (no extra packages)
-const QR_CODE_URL = (value: string) =>
-  `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(value)}`;
+const QR_CODE_URL = (value: string, size = 80) =>
+  `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}`;
 const BARCODE_IMG_URL = (value: string) =>
   `https://quickchart.io/barcode?value=${encodeURIComponent(value)}&format=CODE128&width=2&height=40`;
 import Loader from '@/components/Loader';
@@ -15,12 +15,37 @@ const DEFAULT_PAGE_SIZE = 10;
 
 type AddProductStepId = 'details' | 'images' | 'pricing' | 'properties' | 'review';
 
-const initialForm = {
+type FormState = {
+  name: string;
+  description: string;
+  sku: string;
+  category: string;
+  category_id: string;
+  unit_price: number;
+  discount_percent: number;
+  currency: string;
+  stock_quantity: number;
+  unit: string;
+  requires_rx: boolean;
+  is_active: boolean;
+  expiry_date: string;
+  manufacturing_date: string;
+  brand: string;
+  barcode: string;
+  storage_conditions: string;
+  dosage_form: string;
+  pack_size: string;
+  generic_name: string;
+  batch_number: string;
+  batch_expiry_date: string;
+};
+
+const initialForm: FormState = {
   name: '',
   description: '',
   sku: '',
   category: '',
-  category_id: '', // optional: FK to category (parent or subcategory); product type = category + subcategory
+  category_id: '',
   unit_price: 0,
   discount_percent: 0,
   currency: 'NPR',
@@ -36,7 +61,38 @@ const initialForm = {
   dosage_form: '',
   pack_size: '',
   generic_name: '',
+  batch_number: '',
+  batch_expiry_date: '',
 };
+
+function productToForm(p: Product): FormState {
+  const expiry = p.expiry_date ? p.expiry_date.slice(0, 10) : '';
+  const manufacturing = p.manufacturing_date ? p.manufacturing_date.slice(0, 10) : '';
+  return {
+    name: p.name ?? '',
+    description: p.description ?? '',
+    sku: p.sku ?? '',
+    category: p.category ?? '',
+    category_id: p.category_id ?? '',
+    unit_price: p.unit_price ?? 0,
+    discount_percent: p.discount_percent ?? 0,
+    currency: p.currency ?? 'NPR',
+    stock_quantity: p.stock_quantity ?? 0,
+    unit: p.unit ?? 'units',
+    requires_rx: p.requires_rx ?? false,
+    is_active: p.is_active ?? true,
+    expiry_date: expiry,
+    manufacturing_date: manufacturing,
+    brand: p.brand ?? '',
+    barcode: p.barcode ?? '',
+    storage_conditions: p.storage_conditions ?? '',
+    dosage_form: p.dosage_form ?? '',
+    pack_size: p.pack_size ?? '',
+    generic_name: p.generic_name ?? '',
+    batch_number: '',
+    batch_expiry_date: '',
+  };
+}
 
 const ADD_PRODUCT_STEPS: { id: AddProductStepId; label: string; icon: typeof FileText }[] = [
   { id: 'details', label: 'Details', icon: FileText },
@@ -60,9 +116,10 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [modalStep, setModalStep] = useState<AddProductStepId>('details');
   const [createdProductId, setCreatedProductId] = useState<string | null>(null);
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState<FormState>(initialForm);
   const [submitError, setSubmitError] = useState('');
   const [productFieldErrors, setProductFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -314,6 +371,7 @@ export default function ProductsPage() {
   };
 
   const openModal = () => {
+    setEditingProduct(null);
     setForm(initialForm);
     setSelectedParentId(null);
     setSubmitError('');
@@ -326,6 +384,33 @@ export default function ProductsPage() {
     setModalOpen(true);
   };
 
+  const openEditModal = async (p: Product) => {
+    setOpenMenuId(null);
+    setSubmitError('');
+    setProductFieldErrors({});
+    setImageError('');
+    setPendingFiles([]);
+    try {
+      const full = await productApi.get(p.id);
+      setEditingProduct(full);
+      setForm(productToForm(full));
+      const detail = full.category_detail;
+      if (detail?.parent) {
+        setSelectedParentId(detail.parent.id);
+      } else if (full.category_id) {
+        setSelectedParentId(full.category_id);
+      } else {
+        setSelectedParentId(null);
+      }
+      setUploadedImages(full.images ?? []);
+      setCreatedProductId(full.id);
+      setModalStep('details');
+      setModalOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load product');
+    }
+  };
+
   const stepIndex = ADD_PRODUCT_STEPS.findIndex((s) => s.id === modalStep);
   const goNext = () => {
     if (stepIndex < ADD_PRODUCT_STEPS.length - 1) setModalStep(ADD_PRODUCT_STEPS[stepIndex + 1].id);
@@ -336,6 +421,7 @@ export default function ProductsPage() {
 
   const closeModal = () => {
     setModalOpen(false);
+    setEditingProduct(null);
     setSubmitError('');
     setProductFieldErrors({});
     setCreatedProductId(null);
@@ -385,16 +471,31 @@ export default function ProductsPage() {
     generic_name: form.generic_name.trim() || undefined,
   });
 
-  /** Create product and upload images on Review & Submit (step 5). */
+  /** Create or update product on Review & Submit (step 5). For add: upload images and optional initial batch. For edit: update product and optionally upload new images. */
   const handleSubmitProduct = async () => {
     setSubmitError('');
     setProductFieldErrors({});
+    const isEdit = !!editingProduct;
     const clientErrors: Record<string, string> = {};
     if (!form.name.trim()) clientErrors.name = 'Product name is required';
     if (!form.sku.trim()) clientErrors.sku = 'SKU is required';
-    if (pendingFiles.length < 1) {
+    const hasExistingImages = uploadedImages.length >= 1;
+    const hasNewImages = pendingFiles.length >= 1;
+    if (!isEdit && !hasNewImages) {
       setSubmitError('Please add at least one image in step 2.');
       return;
+    }
+    if (isEdit && !hasExistingImages && !hasNewImages) {
+      setSubmitError('Please add at least one image in step 2.');
+      return;
+    }
+    const hasBatchNumber = !!form.batch_number.trim();
+    const hasQuantity = (form.stock_quantity ?? 0) >= 1;
+    if (hasBatchNumber && !hasQuantity) {
+      clientErrors.stock_quantity = 'Quantity is required when adding a batch (min 1).';
+    }
+    if (!isEdit && hasQuantity && !hasBatchNumber) {
+      clientErrors.batch_number = 'Batch number is required when adding inventory.';
     }
     if (Object.keys(clientErrors).length > 0) {
       setProductFieldErrors(clientErrors);
@@ -404,20 +505,36 @@ export default function ProductsPage() {
     setSubmitting(true);
     setImageError('');
     try {
-      const created = await productApi.create(fullProductPayload());
-      setProducts((prev) => [...prev, created]);
-      setCreatedProductId(created.id);
-      for (let i = 0; i < pendingFiles.length; i++) {
-        const isPrimary = i === 0;
-        await productApi.addImage(created.id, pendingFiles[i], isPrimary);
+      if (isEdit) {
+        await productApi.update(editingProduct.id, fullProductPayload());
+        for (let i = 0; i < pendingFiles.length; i++) {
+          const isPrimary = uploadedImages.length === 0 && i === 0;
+          await productApi.addImage(editingProduct.id, pendingFiles[i], isPrimary);
+        }
+        closeModal();
+      } else {
+        const created = await productApi.create(fullProductPayload());
+        setProducts((prev) => [...prev, created]);
+        setCreatedProductId(created.id);
+        if (hasBatchNumber && hasQuantity) {
+          await inventoryApi.addBatch(created.id, {
+            batch_number: form.batch_number.trim(),
+            quantity: form.stock_quantity,
+            expiry_date: form.batch_expiry_date.trim() || undefined,
+          });
+        }
+        for (let i = 0; i < pendingFiles.length; i++) {
+          const isPrimary = i === 0;
+          await productApi.addImage(created.id, pendingFiles[i], isPrimary);
+        }
+        closeModal();
       }
-      closeModal();
     } catch (err) {
       if (err instanceof ApiError && err.fields) {
         setProductFieldErrors(err.fields);
         setSubmitError(err.message || 'Please fix the errors below.');
       } else {
-        setSubmitError(err instanceof Error ? err.message : 'Failed to add product');
+        setSubmitError(err instanceof Error ? err.message : isEdit ? 'Failed to update product' : 'Failed to add product');
       }
     } finally {
       setSubmitting(false);
@@ -706,10 +823,7 @@ export default function ProductsPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              navigate(`/products/${p.id}`);
-                            }}
+                            onClick={() => openEditModal(p)}
                             className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                           >
                             <Pencil className="w-4 h-4" />
@@ -844,8 +958,8 @@ export default function ProductsPage() {
             <div className="flex flex-col sm:flex-row gap-6 items-center justify-center">
               <div className="flex flex-col items-center gap-2">
                 <span className="text-sm font-medium text-gray-700">QR Code</span>
-                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                  <img src={QR_CODE_URL(String(qrBarcodeProduct.id))} width={160} height={160} alt="Product QR code" className="rounded" />
+                <div className="bg-white p-2 rounded-lg border border-gray-200 inline-flex">
+                  <img src={QR_CODE_URL(String(qrBarcodeProduct.id), 80)} width={80} height={80} alt="Product QR code" className="rounded" />
                 </div>
               </div>
               {qrBarcodeProduct.barcode ? (
@@ -896,7 +1010,7 @@ export default function ProductsPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 id="add-product-title" className="text-lg font-semibold text-gray-800">
-                    Add Product
+                    {editingProduct ? 'Edit Product' : 'Add Product'}
                   </h2>
                   <p className="text-sm text-gray-500 mt-0.5" aria-live="polite">
                     Step {stepIndex + 1} of {ADD_PRODUCT_STEPS.length}
@@ -1140,8 +1254,25 @@ export default function ProductsPage() {
                     Images
                   </h3>
                   <p className="text-sm text-gray-600 mb-4">
-                    Add at least one image. Images will be uploaded when you submit in the final step.
+                    {editingProduct
+                      ? 'Existing images are shown below. You can add more or proceed to save changes.'
+                      : 'Add at least one image. Images will be uploaded when you submit in the final step.'}
                   </p>
+                  {editingProduct && uploadedImages.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs font-medium text-gray-600 mb-2">Existing images</p>
+                      <div className="flex flex-wrap gap-2">
+                        {uploadedImages.map((img) => (
+                          <img
+                            key={img.id}
+                            src={resolveImageUrl(img.url)}
+                            alt=""
+                            className="w-14 h-14 rounded object-cover border border-gray-300"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <section className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 mb-4">
                     <p className="text-xs font-medium text-gray-600 mb-2">
                       Add at least one image (JPEG, PNG, GIF, WebP, SVG · max 10 MB each)
@@ -1182,7 +1313,7 @@ export default function ProductsPage() {
                       )}
                     </div>
                   </section>
-                  {pendingFiles.length === 0 && (
+                  {pendingFiles.length === 0 && !(editingProduct && uploadedImages.length >= 1) && (
                     <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg mb-4">
                       At least one image is required. Please select images above.
                     </p>
@@ -1195,7 +1326,7 @@ export default function ProductsPage() {
                     <button
                       type="button"
                       onClick={goNext}
-                      disabled={pendingFiles.length < 1}
+                      disabled={pendingFiles.length < 1 && !(editingProduct && uploadedImages.length >= 1)}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-careplus-primary text-white rounded-lg hover:bg-careplus-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next: Pricing & Stock
@@ -1276,7 +1407,7 @@ export default function ProductsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label htmlFor="stock_quantity" className="block text-sm font-medium text-gray-700 mb-1">
-                          Stock quantity
+                          Stock quantity <span className="text-red-500">*</span>
                         </label>
                         <input
                           id="stock_quantity"
@@ -1284,10 +1415,13 @@ export default function ProductsPage() {
                           type="number"
                           min={0}
                           value={form.stock_quantity == null || form.stock_quantity === '' ? '' : Number(form.stock_quantity)}
-                          onChange={handleChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-careplus-primary"
+                          onChange={(e) => { handleChange(e); setProductFieldErrors((p) => ({ ...p, stock_quantity: '', batch_number: '' })); }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-careplus-primary ${productFieldErrors.stock_quantity ? 'border-red-500' : 'border-gray-300'}`}
                           placeholder="0"
+                          aria-invalid={!!productFieldErrors.stock_quantity}
                         />
+                        {productFieldErrors.stock_quantity && <p className="mt-1 text-sm text-red-600">{productFieldErrors.stock_quantity}</p>}
+                        <p className="text-xs text-gray-500 mt-0.5">Used as initial batch quantity when batch number is set.</p>
                       </div>
                       <div>
                         <label htmlFor="unit" className="block text-sm font-medium text-gray-700 mb-1">
@@ -1324,6 +1458,42 @@ export default function ProductsPage() {
                         {productUnits.length === 0 && (
                           <p className="mt-1 text-xs text-gray-500">No units yet. Click + to add one.</p>
                         )}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-700 border-b border-gray-200 pb-2">Initial inventory (batch)</h4>
+                    <p className="text-xs text-gray-500">Optionally add a batch so this product is tracked in inventory. Batch number and quantity are required to create inventory.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="batch_number" className="block text-sm font-medium text-gray-700 mb-1">
+                          Batch number
+                        </label>
+                        <input
+                          id="batch_number"
+                          name="batch_number"
+                          type="text"
+                          value={form.batch_number}
+                          onChange={(e) => { setForm((prev) => ({ ...prev, batch_number: e.target.value })); setProductFieldErrors((p) => ({ ...p, batch_number: '' })); }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-careplus-primary ${productFieldErrors.batch_number ? 'border-red-500' : 'border-gray-300'}`}
+                          placeholder="e.g. BATCH-001"
+                          aria-invalid={!!productFieldErrors.batch_number}
+                        />
+                        {productFieldErrors.batch_number && <p className="mt-1 text-sm text-red-600">{productFieldErrors.batch_number}</p>}
+                      </div>
+                      <div>
+                        <label htmlFor="batch_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
+                          Batch expiry date
+                        </label>
+                        <input
+                          id="batch_expiry_date"
+                          name="batch_expiry_date"
+                          type="date"
+                          value={form.batch_expiry_date}
+                          onChange={(e) => setForm((prev) => ({ ...prev, batch_expiry_date: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-careplus-primary"
+                        />
                       </div>
                     </div>
                   </section>
@@ -1564,6 +1734,16 @@ export default function ProductsPage() {
                         <dd>{(form.discount_percent ?? 0) > 0 ? `${form.discount_percent}%` : '—'}</dd>
                         <dt className="text-gray-500">Stock / unit</dt>
                         <dd>{form.stock_quantity} {form.unit}</dd>
+                        {form.batch_number.trim() && (
+                          <>
+                            <dt className="text-gray-500">Initial batch</dt>
+                            <dd className="sm:col-span-1 font-mono">{form.batch_number}</dd>
+                            <dt className="text-gray-500">Batch quantity</dt>
+                            <dd>{form.stock_quantity} {form.unit}</dd>
+                            <dt className="text-gray-500">Batch expiry</dt>
+                            <dd>{form.batch_expiry_date || '—'}</dd>
+                          </>
+                        )}
                       </dl>
                     </section>
 
@@ -1614,10 +1794,12 @@ export default function ProductsPage() {
                     <button
                       type="button"
                       onClick={handleSubmitProduct}
-                      disabled={submitting || pendingFiles.length < 1}
+                      disabled={submitting || (pendingFiles.length < 1 && !(editingProduct && uploadedImages.length >= 1))}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-careplus-primary text-white rounded-lg hover:bg-careplus-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {submitting ? 'Adding product…' : 'Add Product'}
+                      {submitting
+                        ? (editingProduct ? 'Saving…' : 'Adding product…')
+                        : (editingProduct ? 'Save changes' : 'Add Product')}
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/careplus/pharmacy-backend/internal/adapters/http/dto/response"
@@ -12,12 +13,13 @@ import (
 )
 
 type AuthHandler struct {
-	authService inbound.AuthService
-	logger      *zap.Logger
+	authService        inbound.AuthService
+	activityLogService inbound.ActivityLogService
+	logger             *zap.Logger
 }
 
-func NewAuthHandler(authService inbound.AuthService, logger *zap.Logger) *AuthHandler {
-	return &AuthHandler{authService: authService, logger: logger}
+func NewAuthHandler(authService inbound.AuthService, activityLogService inbound.ActivityLogService, logger *zap.Logger) *AuthHandler {
+	return &AuthHandler{authService: authService, activityLogService: activityLogService, logger: logger}
 }
 
 type loginRequest struct {
@@ -55,6 +57,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: "Login failed"})
 		return
+	}
+	// Audit log: login (no middleware on this route)
+	if h.activityLogService != nil && user != nil {
+		details, _ := json.Marshal(map[string]string{"email": user.Email})
+		_ = h.activityLogService.Create(c.Request.Context(), user.PharmacyID, user.ID, "POST /auth/login", "User logged in", "user", user.ID.String(), string(details), c.ClientIP())
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  accessToken,
@@ -109,6 +116,17 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"access_token": accessToken, "expires_in": 900})
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	userIDStr, _ := c.Get("user_id")
+	pharmacyIDStr, _ := c.Get("pharmacy_id")
+	userID, err1 := uuid.Parse(userIDStr.(string))
+	pharmacyID, err2 := uuid.Parse(pharmacyIDStr.(string))
+	if err1 == nil && err2 == nil && h.activityLogService != nil {
+		_ = h.activityLogService.Create(c.Request.Context(), pharmacyID, userID, "POST /auth/logout", "User logged out", "user", userID.String(), "{}", c.ClientIP())
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }
 
 func (h *AuthHandler) GetCurrentUser(c *gin.Context) {

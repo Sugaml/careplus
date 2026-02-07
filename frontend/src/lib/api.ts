@@ -134,6 +134,7 @@ export const authApi = {
       body: JSON.stringify({ refresh_token: refreshToken }),
     }),
   me: () => api<User>('/auth/me'),
+  logout: () => api<{ message: string }>('/auth/logout', { method: 'POST' }),
   updateProfile: (body: { name: string }) =>
     api<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
   changePassword: (body: { current_password: string; new_password: string }) =>
@@ -285,6 +286,35 @@ export const publicStoreApi = {
     return api<ProductReviewWithMeta[]>(`/public/products/${productId}/reviews${q ? `?${q}` : ''}`);
   },
 };
+
+/** Public app config by hostname (no auth). Used to load company name, theme, language, tenant, website on/off, features. */
+export interface AppConfigResponse {
+  company_name: string;
+  default_theme: string;
+  language: string;
+  address: string;
+  tenant_code: string;
+  pharmacy_id: string;
+  business_type: string;
+  website_enabled: boolean;
+  features: Record<string, boolean>;
+  logo_url?: string;
+  tagline?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  verified_at?: string | null;
+}
+
+/** Fetch /app-config (public). Optional hostname for dev or override; otherwise server uses Host header. */
+export async function fetchAppConfig(hostname?: string): Promise<AppConfigResponse | null> {
+  const url = hostname
+    ? `${API_BASE}/app-config?hostname=${encodeURIComponent(hostname)}`
+    : `${API_BASE}/app-config`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  return data as AppConfigResponse;
+}
 
 export const configApi = {
   get: () => api<PharmacyConfig>('/config'),
@@ -559,6 +589,7 @@ export interface ActivityLog {
   pharmacy_id: string;
   user_id: string;
   action: string;
+  description?: string;
   entity_type?: string;
   entity_id?: string;
   details?: string;
@@ -692,6 +723,9 @@ export interface Pharmacy {
   id: string;
   name: string;
   license_no: string;
+  tenant_code?: string;
+  hostname_slug?: string;
+  business_type?: string;
   address: string;
   phone: string;
   email: string;
@@ -710,6 +744,9 @@ export interface PharmacyConfig {
   contact_phone: string;
   contact_email: string;
   primary_color: string;
+  default_language?: string;
+  website_enabled?: boolean;
+  feature_flags?: Record<string, boolean>;
   license_no?: string;
   verified_at?: string | null;
   established_year?: number;

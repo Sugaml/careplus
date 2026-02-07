@@ -772,9 +772,16 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
                               <Package className="w-10 h-10 sm:w-14 sm:h-14" />
                             </div>
                           )}
-                          {p.stock_quantity > 0 && p.stock_quantity <= 10 && (
-                            <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-500/95 text-white shadow">Low stock</span>
-                          )}
+                          <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-wrap gap-1">
+                            {(p.discount_percent ?? 0) > 0 && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-emerald-600 text-white shadow">
+                                {Math.round(p.discount_percent)}% off
+                              </span>
+                            )}
+                            {p.stock_quantity > 0 && p.stock_quantity <= 10 && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-500/95 text-white shadow">Low stock</span>
+                            )}
+                          </div>
                         </div>
                         <div className="p-3 flex flex-col flex-1 min-h-0">
                           <div className="flex flex-wrap items-center gap-1 mb-1.5">
@@ -782,6 +789,11 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
                               <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-amber-500/20 text-amber-700 dark:text-amber-400">Rx</span>
                             ) : (
                               <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">OTC</span>
+                            )}
+                            {p.brand && (
+                              <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-theme-bg text-theme-text-secondary truncate max-w-[4rem] sm:max-w-none">
+                                {p.brand}
+                              </span>
                             )}
                             {p.labels && Object.entries(p.labels).slice(0, 2).map(([k, v]) => (
                               <span key={k} className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-theme-bg text-theme-text-secondary truncate max-w-[4rem] sm:max-w-none">
@@ -800,10 +812,24 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
                               <span>({p.review_count})</span>
                             </div>
                           )}
-                          <p className="mt-2 text-base sm:text-lg font-bold text-careplus-primary leading-tight">
-                            {p.currency} {p.unit_price.toFixed(2)}
-                            {p.unit && <span className="text-xs sm:text-sm font-normal text-theme-muted"> / {p.unit}</span>}
-                          </p>
+                          <div className="mt-2">
+                            {(p.discount_percent ?? 0) > 0 ? (
+                              <div className="flex flex-wrap items-baseline gap-1.5">
+                                <span className="text-xs sm:text-sm text-theme-muted line-through">
+                                  {p.currency} {(p.unit_price / (1 - (p.discount_percent! / 100))).toFixed(2)}
+                                </span>
+                                <span className="text-base sm:text-lg font-bold text-careplus-primary">
+                                  {p.currency} {p.unit_price.toFixed(2)}
+                                  {p.unit && <span className="text-xs sm:text-sm font-normal text-theme-muted"> / {p.unit}</span>}
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="text-base sm:text-lg font-bold text-careplus-primary leading-tight">
+                                {p.currency} {p.unit_price.toFixed(2)}
+                                {p.unit && <span className="text-xs sm:text-sm font-normal text-theme-muted"> / {p.unit}</span>}
+                              </p>
+                            )}
+                          </div>
                           <p className={`text-[10px] sm:text-xs mt-0.5 ${p.stock_quantity > 0 ? 'text-theme-muted' : 'text-amber-600 dark:text-amber-400'}`}>
                             {p.stock_quantity > 0 ? `${t('in_stock')}: ${p.stock_quantity}` : t('out_of_stock')}
                           </p>

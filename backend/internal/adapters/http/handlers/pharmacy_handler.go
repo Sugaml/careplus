@@ -22,23 +22,33 @@ func NewPharmacyHandler(pharmacyService inbound.PharmacyService, logger *zap.Log
 }
 
 type pharmacyBody struct {
-	Name      string `json:"name" binding:"required"`
-	LicenseNo string `json:"license_no" binding:"required"`
-	Address   string `json:"address"`
-	Phone     string `json:"phone"`
-	Email     string `json:"email"`
-	IsActive  bool   `json:"is_active"`
+	Name          string `json:"name" binding:"required"`
+	LicenseNo     string `json:"license_no" binding:"required"`
+	TenantCode    string `json:"tenant_code"`
+	HostnameSlug  string `json:"hostname_slug"`
+	BusinessType  string `json:"business_type"` // pharmacy, retail, clinic, other
+	Address       string `json:"address"`
+	Phone         string `json:"phone"`
+	Email         string `json:"email"`
+	IsActive      bool   `json:"is_active"`
 }
 
 func (b pharmacyBody) toPharmacy(id uuid.UUID) models.Pharmacy {
+	bt := b.BusinessType
+	if bt == "" {
+		bt = models.BusinessTypePharmacy
+	}
 	return models.Pharmacy{
-		ID:        id,
-		Name:      b.Name,
-		LicenseNo: b.LicenseNo,
-		Address:   b.Address,
-		Phone:     b.Phone,
-		Email:     b.Email,
-		IsActive:  b.IsActive,
+		ID:           id,
+		Name:         b.Name,
+		LicenseNo:    b.LicenseNo,
+		TenantCode:   b.TenantCode,
+		HostnameSlug: b.HostnameSlug,
+		BusinessType: bt,
+		Address:      b.Address,
+		Phone:        b.Phone,
+		Email:        b.Email,
+		IsActive:     b.IsActive,
 	}
 }
 

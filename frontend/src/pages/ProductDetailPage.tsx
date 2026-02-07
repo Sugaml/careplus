@@ -436,6 +436,74 @@ export default function ProductDetailPage() {
                   )}
                 </div>
               )}
+              {/* Product information: SKU, category, brand, generic, dosage, pack, barcode, storage, expiry, manufacturing */}
+              {(product.sku || product.brand || product.generic_name || product.dosage_form || product.pack_size || product.barcode || (product.storage_conditions && product.storage_conditions.trim()) || product.expiry_date || product.manufacturing_date) && (
+                <div className="mt-4 p-4 rounded-lg bg-gray-50 border border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800 border-b border-gray-200 pb-2 mb-3">Product information</h3>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    {product.sku && (
+                      <>
+                        <dt className="text-gray-500">SKU</dt>
+                        <dd className="text-gray-900 font-medium">{product.sku}</dd>
+                      </>
+                    )}
+                    {product.category && (
+                      <>
+                        <dt className="text-gray-500">Category</dt>
+                        <dd className="text-gray-900">{product.category_detail ? (product.category_detail.parent ? `${product.category_detail.parent.name} › ${product.category_detail.name}` : product.category_detail.name) : product.category}</dd>
+                      </>
+                    )}
+                    {product.brand && (
+                      <>
+                        <dt className="text-gray-500">Brand</dt>
+                        <dd className="text-gray-900">{product.brand}</dd>
+                      </>
+                    )}
+                    {product.generic_name && (
+                      <>
+                        <dt className="text-gray-500">Generic name</dt>
+                        <dd className="text-gray-900">{product.generic_name}</dd>
+                      </>
+                    )}
+                    {product.dosage_form && (
+                      <>
+                        <dt className="text-gray-500">Dosage form</dt>
+                        <dd className="text-gray-900">{product.dosage_form}</dd>
+                      </>
+                    )}
+                    {product.pack_size && (
+                      <>
+                        <dt className="text-gray-500">Pack size</dt>
+                        <dd className="text-gray-900">{product.pack_size}</dd>
+                      </>
+                    )}
+                    {product.barcode && (
+                      <>
+                        <dt className="text-gray-500">Barcode</dt>
+                        <dd className="text-gray-900 font-mono">{product.barcode}</dd>
+                      </>
+                    )}
+                    {product.storage_conditions && product.storage_conditions.trim() && (
+                      <>
+                        <dt className="text-gray-500">Storage</dt>
+                        <dd className="text-gray-900">{product.storage_conditions}</dd>
+                      </>
+                    )}
+                    {product.expiry_date && (
+                      <>
+                        <dt className="text-gray-500">Expiry date</dt>
+                        <dd className="text-gray-900">{formatDate(product.expiry_date)}</dd>
+                      </>
+                    )}
+                    {product.manufacturing_date && (
+                      <>
+                        <dt className="text-gray-500">Manufacturing date</dt>
+                        <dd className="text-gray-900">{formatDate(product.manufacturing_date)}</dd>
+                      </>
+                    )}
+                  </dl>
+                </div>
+              )}
               <button
                 onClick={handleAddToCart}
                 disabled={user ? product.stock_quantity < 1 : false}
@@ -576,9 +644,17 @@ export default function ProductDetailPage() {
                     )}
                   </div>
                   <p className="p-2 text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                  <p className="px-2 pb-2 text-sm text-careplus-primary font-semibold">
-                    {p.currency} {p.unit_price.toFixed(2)}
-                  </p>
+                  <div className="px-2 pb-2">
+                    {(p.discount_percent ?? 0) > 0 ? (
+                      <div className="flex flex-wrap items-baseline gap-1">
+                        <span className="text-xs text-gray-500 line-through">{p.currency} {(p.unit_price / (1 - (p.discount_percent! / 100))).toFixed(2)}</span>
+                        <span className="text-sm text-careplus-primary font-semibold">{p.currency} {p.unit_price.toFixed(2)}</span>
+                        <span className="text-[10px] font-medium text-emerald-600">{Math.round(p.discount_percent)}% off</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-careplus-primary font-semibold">{p.currency} {p.unit_price.toFixed(2)}</p>
+                    )}
+                  </div>
                 </Link>
               ))}
             </div>
@@ -605,9 +681,17 @@ export default function ProductDetailPage() {
                     )}
                   </div>
                   <p className="p-2 text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                  <p className="px-2 pb-2 text-sm text-careplus-primary font-semibold">
-                    {p.currency} {p.unit_price.toFixed(2)}
-                  </p>
+                  <div className="px-2 pb-2">
+                    {(p.discount_percent ?? 0) > 0 ? (
+                      <div className="flex flex-wrap items-baseline gap-1">
+                        <span className="text-xs text-gray-500 line-through">{p.currency} {(p.unit_price / (1 - (p.discount_percent! / 100))).toFixed(2)}</span>
+                        <span className="text-sm text-careplus-primary font-semibold">{p.currency} {p.unit_price.toFixed(2)}</span>
+                        <span className="text-[10px] font-medium text-emerald-600">{Math.round(p.discount_percent)}% off</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-careplus-primary font-semibold">{p.currency} {p.unit_price.toFixed(2)}</p>
+                    )}
+                  </div>
                 </Link>
               ))}
             </div>

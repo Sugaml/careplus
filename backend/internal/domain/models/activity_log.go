@@ -11,10 +11,11 @@ type ActivityLog struct {
 	ID         uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	PharmacyID uuid.UUID `gorm:"type:uuid;not null;index" json:"pharmacy_id"`
 	UserID     uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
-	Action     string    `gorm:"size:255;not null" json:"action"`       // e.g. "GET /orders", "POST /products"
-	EntityType string    `gorm:"size:64" json:"entity_type,omitempty"`  // e.g. "order", "product"
-	EntityID   string    `gorm:"size:64" json:"entity_id,omitempty"`   // e.g. order id, product id
-	Details    string    `gorm:"type:text" json:"details,omitempty"`   // optional JSON or text
+	Action      string    `gorm:"size:255;not null" json:"action"`        // e.g. "GET /orders", "POST /products"
+	Description string    `gorm:"size:512" json:"description,omitempty"` // human-readable: "Viewed orders", "User logged in"
+	EntityType  string    `gorm:"size:64" json:"entity_type,omitempty"`  // e.g. "order", "product"
+	EntityID    string    `gorm:"size:64" json:"entity_id,omitempty"`    // e.g. order id, product id
+	Details     string    `gorm:"type:text" json:"details,omitempty"`    // optional JSON: what changed (audit)
 	IPAddress  string    `gorm:"size:45" json:"ip_address,omitempty"`  // IPv4 or IPv6
 	CreatedAt  time.Time `json:"created_at"`
 

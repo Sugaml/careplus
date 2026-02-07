@@ -20,7 +20,7 @@ import InvoicesPage from '@/pages/InvoicesPage';
 import InvoiceDetailPage from '@/pages/InvoiceDetailPage';
 import PaymentsPage from '@/pages/PaymentsPage';
 import StatementsPage from '@/pages/StatementsPage';
-import PharmacyPage from '@/pages/PharmacyPage';
+import CompaniesPage from '@/pages/CompaniesPage';
 import ConfigPage from '@/pages/ConfigPage';
 import ActivityPage from '@/pages/ActivityPage';
 import NotificationsPage from '@/pages/NotificationsPage';
@@ -103,7 +103,7 @@ function AppRoutes() {
         <Route path="announcements" element={<AnnouncementsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="pharmacy" element={<PharmacyPage />} />
+        <Route path="manage/companies" element={<CompaniesPage />} />
         <Route path="config" element={<ConfigPage />} />
         <Route path="profile" element={<ProfileSettingsPage />} />
       </Route>

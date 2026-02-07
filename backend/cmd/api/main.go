@@ -88,7 +88,7 @@ func main() {
 	var userAddressServiceInterface inbound.UserAddressService = userAddressService
 	userService := services.NewUserService(userRepo, pharmacyRepo, zapLogger)
 	pharmacyService := services.NewPharmacyService(pharmacyRepo, zapLogger)
-	configService := services.NewPharmacyConfigService(configRepo, zapLogger)
+	configService := services.NewPharmacyConfigService(configRepo, pharmacyRepo, zapLogger)
 	productService := services.NewProductService(productRepo, productImageRepo, zapLogger)
 	categoryService := services.NewCategoryService(categoryRepo, zapLogger)
 	productUnitService := services.NewProductUnitService(productUnitRepo, zapLogger)
@@ -135,11 +135,11 @@ func main() {
 		fileStorage = storage.NewLocalStorage(cfg.FS)
 	}
 
-	authHandler := handlers.NewAuthHandler(authServiceInterface, zapLogger)
+	authHandler := handlers.NewAuthHandler(authServiceInterface, activityLogServiceInterface, zapLogger)
 	addressHandler := handlers.NewAddressHandler(userAddressServiceInterface, zapLogger)
 	pharmacyHandler := handlers.NewPharmacyHandler(pharmacyServiceInterface, zapLogger)
-	configHandler := handlers.NewConfigHandler(configServiceInterface, zapLogger)
-	usersHandler := handlers.NewUsersHandler(userService, zapLogger)
+	configHandler := handlers.NewConfigHandler(configServiceInterface, activityLogServiceInterface, zapLogger)
+	usersHandler := handlers.NewUsersHandler(userService, activityLogServiceInterface, zapLogger)
 	dutyRosterHandler := handlers.NewDutyRosterHandler(dutyRosterService, zapLogger)
 	dailyLogHandler := handlers.NewDailyLogHandler(dailyLogService, zapLogger)
 	dashboardHandler := handlers.NewDashboardHandler(orderServiceInterface, productServiceInterface, userService, dutyRosterService, dailyLogService, zapLogger)

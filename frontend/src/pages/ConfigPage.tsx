@@ -3,7 +3,45 @@ import { configApi, referralApi, paymentGatewaysApi, type PharmacyConfig, type R
 import { useBrand } from '@/contexts/BrandContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Loader from '@/components/Loader';
-import { Settings, Save, RefreshCw, Gift, CreditCard, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Settings, Save, RefreshCw, Gift, CreditCard, Plus, Pencil, Trash2, Globe, Image, MapPin, FileText, MessageCircle, ShieldCheck } from 'lucide-react';
+
+/** Config page section id (for sub-menu). */
+type ConfigSectionId =
+  | 'company'
+  | 'branding'
+  | 'location'
+  | 'return-refund'
+  | 'chat'
+  | 'trust'
+  | 'referral'
+  | 'payment-gateways';
+
+const CONFIG_SECTIONS: { id: ConfigSectionId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'company', label: 'Company & website', icon: Globe },
+  { id: 'branding', label: 'Branding & media', icon: Image },
+  { id: 'location', label: 'Location & contact', icon: MapPin },
+  { id: 'return-refund', label: 'Return & Refund Policy', icon: FileText },
+  { id: 'chat', label: 'Chat', icon: MessageCircle },
+  { id: 'trust', label: 'Trust & verification', icon: ShieldCheck },
+  { id: 'referral', label: 'Referral & points', icon: Gift },
+  { id: 'payment-gateways', label: 'Payment gateways', icon: CreditCard },
+];
+
+/** Known feature keys for company feature controls (dynamic for any business type). */
+const FEATURE_KEYS: { key: string; label: string }[] = [
+  { key: 'products', label: 'Products / Catalog' },
+  { key: 'orders', label: 'Orders' },
+  { key: 'chat', label: 'Chat' },
+  { key: 'promos', label: 'Promos & offers' },
+  { key: 'referral', label: 'Referral & points' },
+  { key: 'memberships', label: 'Memberships' },
+  { key: 'billing', label: 'Billing (POS)' },
+  { key: 'announcements', label: 'Announcements' },
+  { key: 'inventory', label: 'Inventory' },
+  { key: 'statements', label: 'Statements' },
+  { key: 'categories', label: 'Categories' },
+  { key: 'reviews', label: 'Product reviews' },
+];
 
 export default function ConfigPage() {
   const { refreshBrand } = useBrand();
@@ -24,6 +62,7 @@ export default function ConfigPage() {
   const [editingGatewayId, setEditingGatewayId] = useState<string | null>(null);
   const [gatewaySaving, setGatewaySaving] = useState(false);
   const [gatewayError, setGatewayError] = useState('');
+  const [activeSection, setActiveSection] = useState<ConfigSectionId>('company');
 
   const loadConfig = useCallback(() => {
     setLoading(true);
@@ -99,6 +138,9 @@ export default function ConfigPage() {
         contact_phone: config.contact_phone,
         contact_email: config.contact_email,
         primary_color: config.primary_color,
+        default_language: config.default_language,
+        website_enabled: config.website_enabled,
+        feature_flags: config.feature_flags && Object.keys(config.feature_flags).length > 0 ? config.feature_flags : undefined,
         license_no: config.license_no,
         verified_at: config.verified_at,
         established_year: config.established_year,
@@ -144,19 +186,106 @@ export default function ConfigPage() {
         </button>
       </div>
       <p className="text-gray-600 mb-6">
-        Manage your pharmacy name, location, logo, banner, and contact details. These appear on the public website.
+        Manage your company name, location, logo, website visibility, and feature controls. Works for any business type (pharmacy, retail, clinic, etc.).
       </p>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
-        {error && (
-          <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
-        )}
-        {success && (
-          <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">
-            Configuration saved successfully.
-          </div>
-        )}
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+      )}
+      {success && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+          Configuration saved successfully.
+        </div>
+      )}
 
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Sub-menu */}
+        <nav className="md:w-56 shrink-0" aria-label="Configuration sections">
+          <ul className="flex flex-wrap gap-1 md:flex-col md:gap-0 md:border md:border-gray-200 md:rounded-xl md:overflow-hidden md:bg-white md:shadow-sm">
+            {CONFIG_SECTIONS.map(({ id, label, icon: Icon }) => (
+              <li key={id}>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection(id)}
+                  className={`w-full flex items-center gap-2 px-4 py-3 text-left text-sm font-medium transition-colors rounded-lg md:rounded-none md:border-b md:border-gray-100 last:md:border-b-0 ${
+                    activeSection === id
+                      ? 'bg-careplus-primary text-white md:bg-careplus-primary md:text-white'
+                      : 'text-gray-700 hover:bg-gray-100 md:hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+            {activeSection === 'company' && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <h2 className="font-semibold text-gray-800 border-b pb-2 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-careplus-primary" />
+            Company & website
+          </h2>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="website_enabled"
+              checked={c.website_enabled !== false}
+              onChange={(e) => setConfig((prev) => prev ? { ...prev, website_enabled: e.target.checked } : null)}
+              className="w-4 h-4 rounded border-gray-300 text-careplus-primary focus:ring-careplus-primary"
+            />
+            <label htmlFor="website_enabled" className="text-sm font-medium text-gray-700">
+              Website enabled
+            </label>
+          </div>
+          <p className="text-xs text-gray-500">
+            When disabled, the public website shows a &quot;temporarily unavailable&quot; message. Dashboard and login remain available.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Default language</label>
+            <select
+              value={c.default_language ?? 'en'}
+              onChange={(e) => setConfig((prev) => prev ? { ...prev, default_language: e.target.value } : null)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
+            >
+              <option value="en">English</option>
+              <option value="ne">नेपाली (Nepali)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Feature controls</label>
+            <p className="text-xs text-gray-500 mb-3">
+              Enable or disable features for this company. Unlisted features are treated as enabled.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {FEATURE_KEYS.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id={`feature_${key}`}
+                    checked={c.feature_flags?.[key] !== false}
+                    onChange={(e) => {
+                      setConfig((prev) => {
+                        if (!prev) return null;
+                        const next = { ...(prev.feature_flags ?? {}), [key]: e.target.checked };
+                        return { ...prev, feature_flags: next };
+                      });
+                    }}
+                    className="w-4 h-4 rounded border-gray-300 text-careplus-primary focus:ring-careplus-primary"
+                  />
+                  <label htmlFor={`feature_${key}`} className="text-sm text-gray-700">{label}</label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+            )}
+
+            {activeSection === 'branding' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
           <h2 className="font-semibold text-gray-800 border-b pb-2">Branding & media</h2>
           <div>
@@ -221,7 +350,9 @@ export default function ConfigPage() {
             />
           </div>
         </div>
+            )}
 
+            {activeSection === 'location' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
           <h2 className="font-semibold text-gray-800 border-b pb-2">Location & contact</h2>
           <div>
@@ -258,7 +389,9 @@ export default function ConfigPage() {
             />
           </div>
         </div>
+            )}
 
+            {activeSection === 'return-refund' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
           <h2 className="font-semibold text-gray-800 border-b pb-2">Return & Refund Policy</h2>
           <p className="text-sm text-gray-500">
@@ -272,7 +405,9 @@ export default function ConfigPage() {
             placeholder="e.g. We accept returns within 7 days for unopened items..."
           />
         </div>
+            )}
 
+            {activeSection === 'chat' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
           <h2 className="font-semibold text-gray-800 border-b pb-2">Chat</h2>
           <div>
@@ -293,7 +428,9 @@ export default function ConfigPage() {
             />
           </div>
         </div>
+            )}
 
+            {activeSection === 'trust' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
           <h2 className="font-semibold text-gray-800 border-b pb-2">Trust & verification</h2>
           <div>
@@ -340,7 +477,9 @@ export default function ConfigPage() {
             />
           </div>
         </div>
+            )}
 
+            {activeSection === 'referral' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
           <h2 className="font-semibold text-gray-800 border-b pb-2 flex items-center gap-2">
             <Gift className="w-5 h-5 text-careplus-primary" />
@@ -457,7 +596,9 @@ export default function ConfigPage() {
             </>
           ) : null}
         </div>
+            )}
 
+            {activeSection === 'payment-gateways' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
           <h2 className="font-semibold text-gray-800 border-b pb-2 flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-careplus-primary" />
@@ -586,44 +727,50 @@ export default function ConfigPage() {
                   )}
                 </div>
               ) : (
-                <div className="pt-2 border-t border-gray-200 space-y-2">
+                <div className="pt-2 border-t border-gray-200 space-y-3">
                   <p className="text-sm font-medium text-gray-700">Add gateway</p>
-                  <div className="flex flex-wrap gap-2 items-end">
-                    <select
-                      value={paymentGatewayForm?.code ?? ''}
-                      onChange={(e) => {
-                        const code = e.target.value;
-                        const optionText = e.target.selectedOptions[0]?.text ?? code;
-                        if (!code) {
-                          setPaymentGatewayForm(null);
-                          return;
+                  <div className="flex flex-wrap gap-3 items-end">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Gateway type</label>
+                      <select
+                        value={paymentGatewayForm?.code ?? ''}
+                        onChange={(e) => {
+                          const code = e.target.value;
+                          const optionText = e.target.selectedOptions[0]?.text ?? code;
+                          if (!code) {
+                            setPaymentGatewayForm(null);
+                            return;
+                          }
+                          setPaymentGatewayForm({
+                            code,
+                            name: code === 'other' ? '' : optionText,
+                            is_active: true,
+                            sort_order: paymentGatewayForm?.sort_order ?? paymentGateways.length,
+                          });
+                        }}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      >
+                        <option value="">Select type…</option>
+                        <option value="esewa">eSewa</option>
+                        <option value="khalti">Khalti</option>
+                        <option value="qr">QR</option>
+                        <option value="cod">Cash on Delivery</option>
+                        <option value="fonepay">Fonepay</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Display name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. eSewa"
+                        value={paymentGatewayForm?.name ?? ''}
+                        onChange={(e) =>
+                          setPaymentGatewayForm((p) => (p ? { ...p, name: e.target.value } : null))
                         }
-                        setPaymentGatewayForm({
-                          code,
-                          name: code === 'other' ? '' : optionText,
-                          is_active: true,
-                          sort_order: paymentGatewayForm?.sort_order ?? paymentGateways.length,
-                        });
-                      }}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    >
-                      <option value="">Select type…</option>
-                      <option value="esewa">eSewa</option>
-                      <option value="khalti">Khalti</option>
-                      <option value="qr">QR</option>
-                      <option value="cod">Cash on Delivery</option>
-                      <option value="fonepay">Fonepay</option>
-                      <option value="other">Other</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Display name"
-                      value={paymentGatewayForm?.name ?? ''}
-                      onChange={(e) =>
-                        setPaymentGatewayForm((p) => (p ? { ...p, name: e.target.value } : null))
-                      }
-                      className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    />
+                        className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={async () => {
@@ -646,10 +793,10 @@ export default function ConfigPage() {
                         }
                       }}
                       disabled={gatewaySaving || !paymentGatewayForm?.code || !paymentGatewayForm?.name?.trim()}
-                      className="flex items-center gap-1 px-3 py-2 bg-careplus-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                      className="flex items-center gap-2 px-3 py-2 bg-careplus-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
                     >
                       <Plus className="w-4 h-4" />
-                      Add
+                      Add gateway
                     </button>
                   </div>
                   {gatewayError && <p className="text-sm text-red-600">{gatewayError}</p>}
@@ -658,16 +805,22 @@ export default function ConfigPage() {
             </>
           )}
         </div>
+            )}
 
-        <button
-          type="submit"
-          disabled={saving || !config}
-          className="flex items-center gap-2 px-4 py-2.5 bg-careplus-primary text-white rounded-lg hover:bg-careplus-secondary disabled:opacity-50 font-medium"
-        >
-          <Save className="w-5 h-5" />
-          {saving ? 'Saving...' : 'Save configuration'}
-        </button>
-      </form>
+            {/* Save main config: show for all sections except referral & payment-gateways (they have own save) */}
+            {activeSection !== 'referral' && activeSection !== 'payment-gateways' && (
+              <button
+                type="submit"
+                disabled={saving || !config}
+                className="flex items-center gap-2 px-4 py-2.5 bg-careplus-primary text-white rounded-lg hover:bg-careplus-secondary disabled:opacity-50 font-medium"
+              >
+                <Save className="w-5 h-5" />
+                {saving ? 'Saving...' : 'Save configuration'}
+              </button>
+            )}
+          </form>
+        </div>
+      </div>
 
       <ConfirmDialog
         open={saveConfirmOpen}

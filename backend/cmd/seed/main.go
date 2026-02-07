@@ -57,17 +57,56 @@ func runSeed(ctx context.Context, db *gorm.DB, log *zap.Logger) error {
 	err := db.WithContext(ctx).Where("license_no = ?", "DEMO-LICENSE-001").First(&pharmacy).Error
 	if err == gorm.ErrRecordNotFound {
 		pharmacy = models.Pharmacy{
-			Name:      "CarePlus Demo Pharmacy",
-			LicenseNo: "DEMO-LICENSE-001",
-			Address:   "123 Demo Street, Kathmandu",
-			Phone:     "+977 1 2345678",
-			Email:     "demo@careplus.com",
-			IsActive:  true,
+			Name:          "CarePlus Demo Pharmacy",
+			LicenseNo:     "DEMO-LICENSE-001",
+			TenantCode:    "careplus",
+			HostnameSlug:  "careplus",
+			BusinessType:  models.BusinessTypePharmacy,
+			Address:       "123 Demo Street, Kathmandu",
+			Phone:         "+977 1 2345678",
+			Email:         "demo@careplus.com",
+			IsActive:      true,
 		}
 		if err := db.WithContext(ctx).Create(&pharmacy).Error; err != nil {
 			return err
 		}
 		log.Info("Created demo pharmacy", zap.String("id", pharmacy.ID.String()))
+	} else if err != nil {
+		return err
+	} else if pharmacy.TenantCode == "" || pharmacy.HostnameSlug == "" || pharmacy.BusinessType == "" {
+		// Backfill for existing DBs after app-config migration
+		if pharmacy.TenantCode == "" {
+			pharmacy.TenantCode = "careplus"
+		}
+		if pharmacy.HostnameSlug == "" {
+			pharmacy.HostnameSlug = "careplus"
+		}
+		if pharmacy.BusinessType == "" {
+			pharmacy.BusinessType = models.BusinessTypePharmacy
+		}
+		if err := db.WithContext(ctx).Save(&pharmacy).Error; err != nil {
+			return err
+		}
+		log.Info("Updated demo pharmacy with tenant_code, hostname_slug, business_type")
+	}
+
+	// Ensure demo pharmacy has config for /app-config (company_name, theme, language, address)
+	var config models.PharmacyConfig
+	err = db.WithContext(ctx).Where("pharmacy_id = ?", pharmacy.ID).First(&config).Error
+	if err == gorm.ErrRecordNotFound {
+		config = models.PharmacyConfig{
+			PharmacyID:      pharmacy.ID,
+			DisplayName:     "Care+ Pharmacy",
+			Location:        pharmacy.Address,
+			PrimaryColor:    "#0d9488",
+			DefaultLanguage: "en",
+			WebsiteEnabled:  true,
+			FeatureFlags:    models.DefaultFeatureFlags(),
+		}
+		if err := db.WithContext(ctx).Create(&config).Error; err != nil {
+			return err
+		}
+		log.Info("Created demo pharmacy config for app-config")
 	} else if err != nil {
 		return err
 	}

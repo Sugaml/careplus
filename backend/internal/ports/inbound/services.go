@@ -128,9 +128,28 @@ type PaymentGatewayService interface {
 	Delete(ctx context.Context, pharmacyID, id uuid.UUID) error
 }
 
+// AppConfigResponse is the public response for GET /app-config (hostname-based tenant config).
+type AppConfigResponse struct {
+	CompanyName    string          `json:"company_name"`
+	DefaultTheme   string          `json:"default_theme"`
+	Language       string          `json:"language"`
+	Address        string          `json:"address"`
+	TenantCode     string          `json:"tenant_code"`
+	PharmacyID     string          `json:"pharmacy_id"`
+	BusinessType   string          `json:"business_type"`   // pharmacy, retail, clinic, other
+	WebsiteEnabled bool            `json:"website_enabled"` // company website on/off
+	Features       map[string]bool `json:"features"`        // feature flags (products, orders, chat, etc.)
+	LogoURL        string          `json:"logo_url,omitempty"`
+	Tagline        string          `json:"tagline,omitempty"`
+	ContactPhone   string          `json:"contact_phone,omitempty"`
+	ContactEmail   string          `json:"contact_email,omitempty"`
+	VerifiedAt     *string         `json:"verified_at,omitempty"`
+}
+
 type PharmacyConfigService interface {
 	GetByPharmacyID(ctx context.Context, pharmacyID uuid.UUID) (*models.PharmacyConfig, error)
 	GetOrCreateByPharmacyID(ctx context.Context, pharmacyID uuid.UUID) (*models.PharmacyConfig, error)
+	GetAppConfigByHostname(ctx context.Context, hostname string) (*AppConfigResponse, error)
 	Upsert(ctx context.Context, pharmacyID uuid.UUID, c *models.PharmacyConfig) (*models.PharmacyConfig, error)
 }
 
@@ -152,7 +171,7 @@ type ProductUnitService interface {
 }
 
 type ActivityLogService interface {
-	Create(ctx context.Context, pharmacyID, userID uuid.UUID, action, entityType, entityID, details, ipAddress string) error
+	Create(ctx context.Context, pharmacyID, userID uuid.UUID, action, description, entityType, entityID, details, ipAddress string) error
 	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, limit, offset int) ([]*models.ActivityLog, error)
 }
 

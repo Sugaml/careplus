@@ -286,7 +286,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold theme-text flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-theme-text flex items-center gap-2">
           <MessageCircle className="w-7 h-7 text-careplus-primary" />
           {t('nav_chat')}
         </h1>
@@ -306,7 +306,7 @@ export default function ChatPage() {
               type="button"
               onClick={loadConversations}
               disabled={loading}
-              className="p-2 rounded-lg theme-text hover:bg-theme-surface disabled:opacity-50"
+              className="p-2 rounded-lg text-theme-text hover:bg-theme-surface disabled:opacity-50"
               title="Refresh"
             >
               <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -333,7 +333,7 @@ export default function ChatPage() {
                           selected?.id === conv.id ? 'bg-careplus-primary/10 border-l-4 border-l-careplus-primary' : ''
                         }`}
                       >
-                        <div className="font-medium theme-text truncate">
+                        <div className="font-medium text-theme-text truncate">
                           {conv.customer?.name || conv.customer_id?.slice(0, 8) || 'Customer'}
                         </div>
                         <div className="text-sm text-theme-muted flex items-center gap-1">
@@ -355,7 +355,7 @@ export default function ChatPage() {
             <>
               <div className="px-4 py-2 border-b border-theme-border flex items-center justify-between">
                 <div>
-                  <span className="font-medium theme-text">
+                  <span className="font-medium text-theme-text">
                     {selected.customer?.name || selected.customer_id?.slice(0, 8) || selected.user_id ? 'My chat' : 'Customer'}
                   </span>
                   {selected.customer?.phone && (
@@ -392,7 +392,7 @@ export default function ChatPage() {
                           className={`max-w-[75%] rounded-lg px-3 py-2 relative ${
                             m.sender_type === 'user'
                               ? 'bg-careplus-primary text-white'
-                              : 'bg-theme-muted/20 theme-text'
+                              : 'bg-theme-muted/20 text-theme-text'
                           }`}
                         >
                           {editingMessageId === m.id ? (
@@ -400,7 +400,7 @@ export default function ChatPage() {
                               <textarea
                                 value={editBody}
                                 onChange={(e) => setEditBody(e.target.value)}
-                                className="w-full min-h-[60px] rounded border border-theme-border bg-theme-bg theme-text text-sm p-2 focus:outline-none focus:ring-2 focus:ring-careplus-primary"
+                                className="w-full min-h-[60px] rounded border border-theme-border bg-theme-bg text-theme-text text-sm p-2 focus:outline-none focus:ring-2 focus:ring-careplus-primary"
                                 autoFocus
                               />
                               <div className="flex gap-2">
@@ -414,7 +414,7 @@ export default function ChatPage() {
                                 <button
                                   type="button"
                                   onClick={handleCancelEdit}
-                                  className="px-2 py-1 rounded border border-theme-border theme-text text-sm"
+                                  className="px-2 py-1 rounded border border-theme-border text-theme-text text-sm"
                                 >
                                   Cancel
                                 </button>
@@ -474,7 +474,7 @@ export default function ChatPage() {
                                             <button
                                               type="button"
                                               onClick={() => handleStartEdit(m)}
-                                              className="w-full text-left px-3 py-1.5 text-sm theme-text hover:bg-theme-surface flex items-center gap-2"
+                                              className="w-full text-left px-3 py-1.5 text-sm text-theme-text hover:bg-theme-surface flex items-center gap-2"
                                             >
                                               <Pencil className="w-3.5 h-3.5" /> Edit
                                             </button>
@@ -546,7 +546,7 @@ export default function ChatPage() {
                     }
                   }}
                   placeholder="Type a message…"
-                  className="flex-1 rounded-lg border border-theme-border bg-theme-bg theme-text px-3 py-2 focus:outline-none focus:ring-2 focus:ring-careplus-primary"
+                  className="flex-1 rounded-lg border border-theme-border bg-theme-bg text-theme-text px-3 py-2 focus:outline-none focus:ring-2 focus:ring-careplus-primary"
                 />
                 <button
                   type="button"
@@ -578,13 +578,13 @@ export default function ChatPage() {
             className="bg-theme-bg rounded-xl shadow-xl max-w-sm w-full p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="theme-text font-medium mb-2">Delete this conversation?</p>
+            <p className="text-theme-text font-medium mb-2">Delete this conversation?</p>
             <p className="text-sm text-theme-muted mb-4">All messages will be permanently removed. This cannot be undone.</p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => setDeleteConvConfirmOpen(false)}
-                className="px-3 py-2 rounded-lg border border-theme-border theme-text"
+                className="px-3 py-2 rounded-lg border border-theme-border text-theme-text"
               >
                 Cancel
               </button>
@@ -607,13 +607,13 @@ export default function ChatPage() {
             className="bg-theme-bg rounded-xl shadow-xl max-w-sm w-full p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="theme-text font-medium mb-2">Delete this message?</p>
+            <p className="text-theme-text font-medium mb-2">Delete this message?</p>
             <p className="text-sm text-theme-muted mb-4">This cannot be undone.</p>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={() => setDeleteMsgConfirmOpen(null)}
-                className="px-3 py-2 rounded-lg border border-theme-border theme-text"
+                className="px-3 py-2 rounded-lg border border-theme-border text-theme-text"
               >
                 Cancel
               </button>
@@ -636,7 +636,7 @@ export default function ChatPage() {
             className="bg-theme-bg rounded-xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-theme-border font-medium theme-text">Start chat with customer</div>
+            <div className="p-4 border-b border-theme-border font-medium text-theme-text">Start chat with customer</div>
             <div className="overflow-y-auto max-h-[60vh] p-2">
               {customersLoading ? (
                 <Loader variant="inline" />
@@ -647,7 +647,7 @@ export default function ChatPage() {
                       <button
                         type="button"
                         onClick={() => startChatWith(c)}
-                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-theme-surface theme-text flex items-center justify-between"
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-theme-surface text-theme-text flex items-center justify-between"
                       >
                         <span>{c.name || c.phone}</span>
                         <span className="text-sm text-theme-muted">{c.phone}</span>
@@ -661,7 +661,7 @@ export default function ChatPage() {
               <button
                 type="button"
                 onClick={() => setStartChatOpen(false)}
-                className="w-full py-2 rounded-lg border border-theme-border theme-text hover:bg-theme-surface"
+                className="w-full py-2 rounded-lg border border-theme-border text-theme-text hover:bg-theme-surface"
               >
                 Cancel
               </button>

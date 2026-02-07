@@ -19,15 +19,16 @@ func NewActivityLogService(repo outbound.ActivityLogRepository, logger *zap.Logg
 	return &activityLogService{repo: repo, logger: logger}
 }
 
-func (s *activityLogService) Create(ctx context.Context, pharmacyID, userID uuid.UUID, action, entityType, entityID, details, ipAddress string) error {
+func (s *activityLogService) Create(ctx context.Context, pharmacyID, userID uuid.UUID, action, description, entityType, entityID, details, ipAddress string) error {
 	a := &models.ActivityLog{
-		PharmacyID: pharmacyID,
-		UserID:     userID,
-		Action:     action,
-		EntityType: entityType,
-		EntityID:   entityID,
-		Details:    details,
-		IPAddress:  ipAddress,
+		PharmacyID:   pharmacyID,
+		UserID:       userID,
+		Action:       action,
+		Description:  description,
+		EntityType:   entityType,
+		EntityID:     entityID,
+		Details:      details,
+		IPAddress:    ipAddress,
 	}
 	if err := s.repo.Create(ctx, a); err != nil {
 		s.logger.Warn("activity log create failed", zap.Error(err))

@@ -64,6 +64,9 @@ func NewRouter(
 
 	v1 := router.Group("/api/v1")
 	{
+		// Public app config by hostname (no auth): company_name, theme, language, address, tenant_code, pharmacy_id
+		v1.GET("/app-config", configHandler.GetAppConfig)
+
 		// Public routes (no auth): browse products and pharmacies
 		public := v1.Group("/public")
 		{
@@ -88,9 +91,10 @@ func NewRouter(
 		authProtected := v1.Group("/auth")
 		authProtected.Use(middleware.Auth(authProvider, userRepo, logger))
 		{
-			authProtected.GET("/me", authHandler.GetCurrentUser)
-			authProtected.PATCH("/me", authHandler.UpdateProfile)
-			authProtected.PATCH("/me/password", authHandler.ChangePassword)
+		authProtected.GET("/me", authHandler.GetCurrentUser)
+		authProtected.PATCH("/me", authHandler.UpdateProfile)
+		authProtected.PATCH("/me/password", authHandler.ChangePassword)
+		authProtected.POST("/logout", authHandler.Logout)
 			authProtected.GET("/me/addresses", addressHandler.List)
 			authProtected.POST("/me/addresses", addressHandler.Create)
 			authProtected.PUT("/me/addresses/:id", addressHandler.Update)

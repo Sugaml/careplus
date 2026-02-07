@@ -19,6 +19,7 @@ import {
   LogOut,
   User,
   ChevronDown,
+  ChevronRight,
   Activity,
   Pill,
   Megaphone,
@@ -42,14 +43,18 @@ type NavItem = {
   labelKey: string;
   icon: React.ComponentType<{ className?: string }>;
   roles?: string[];
+  /** When set, entry is hidden if company feature is disabled. */
+  featureKey?: string;
 };
 
-type NavGroupChild = { to: string; labelKey: string };
+type NavGroupChild = { to: string; labelKey: string; featureKey?: string };
 
 type NavGroup = {
   labelKey: string;
   icon: React.ComponentType<{ className?: string }>;
   roles?: string[];
+  /** When set, whole group is hidden if company feature is disabled. */
+  featureKey?: string;
   children: NavGroupChild[];
 };
 
@@ -65,9 +70,10 @@ const NAV_ENTRIES: NavEntry[] = [
     labelKey: 'nav_product_management',
     icon: Package,
     roles: ['admin', 'manager', 'pharmacist'],
+    featureKey: 'products',
     children: [
       { to: '/manage/products', labelKey: 'nav_products' },
-      { to: '/manage/categories', labelKey: 'nav_categories' },
+      { to: '/manage/categories', labelKey: 'nav_categories', featureKey: 'categories' },
       { to: '/manage/units', labelKey: 'nav_units' },
       { to: '/products', labelKey: 'nav_catalog' },
     ],
@@ -75,36 +81,50 @@ const NAV_ENTRIES: NavEntry[] = [
   { to: '/manage/team', labelKey: 'nav_team', icon: UserCog, roles: ['admin', 'manager'] },
   { to: '/manage/roster', labelKey: 'nav_duty_roster', icon: CalendarDays, roles: ['admin', 'manager'] },
   { to: '/manage/dailies', labelKey: 'nav_daily_logs', icon: ClipboardList, roles: ['admin', 'manager'] },
-  { to: '/manage/memberships', labelKey: 'nav_memberships', icon: BadgePercent, roles: ['admin', 'manager', 'pharmacist'] },
-  { to: '/manage/customers', labelKey: 'nav_customers', icon: Users, roles: ['admin', 'manager', 'pharmacist'] },
-  { to: '/inventory', labelKey: 'nav_inventory', icon: Boxes, roles: ['admin', 'manager', 'pharmacist'] },
-  { to: '/orders', labelKey: 'nav_orders', icon: ShoppingCart },
-  { to: '/chat', labelKey: 'nav_chat', icon: MessageCircle, roles: ['admin', 'manager', 'pharmacist'] },
-  { to: '/billing', labelKey: 'nav_billing', icon: Receipt, roles: ['admin', 'manager', 'pharmacist'] },
-  { to: '/promo-codes', labelKey: 'nav_promo_codes', icon: Tag, roles: ['admin', 'manager', 'pharmacist'] },
-  { to: '/announcements', labelKey: 'nav_announcements', icon: Megaphone, roles: ['admin', 'manager', 'pharmacist'] },
+  { to: '/manage/memberships', labelKey: 'nav_memberships', icon: BadgePercent, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'memberships' },
+  { to: '/manage/customers', labelKey: 'nav_customers', icon: Users, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'referral' },
+  { to: '/inventory', labelKey: 'nav_inventory', icon: Boxes, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'inventory' },
+  { to: '/orders', labelKey: 'nav_orders', icon: ShoppingCart, featureKey: 'orders' },
+  { to: '/chat', labelKey: 'nav_chat', icon: MessageCircle, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'chat' },
+  { to: '/billing', labelKey: 'nav_billing', icon: Receipt, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'billing' },
+  { to: '/promo-codes', labelKey: 'nav_promo_codes', icon: Tag, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'promos' },
+  { to: '/announcements', labelKey: 'nav_announcements', icon: Megaphone, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'announcements' },
   { to: '/invoices', labelKey: 'nav_invoices', icon: FileText },
   { to: '/payments', labelKey: 'nav_payments', icon: CreditCard },
-  { to: '/statements', labelKey: 'nav_statements', icon: ListOrdered },
-  { to: '/promos', labelKey: 'nav_promos', icon: Megaphone, roles: ['admin'] },
+  { to: '/statements', labelKey: 'nav_statements', icon: ListOrdered, featureKey: 'statements' },
+  { to: '/promos', labelKey: 'nav_promos', icon: Megaphone, roles: ['admin'], featureKey: 'promos' },
   { to: '/activity', labelKey: 'nav_activity', icon: Activity, roles: ['admin'] },
-  { to: '/pharmacy', labelKey: 'nav_pharmacy', icon: Building2, roles: ['admin'] },
+  { to: '/manage/companies', labelKey: 'nav_companies', icon: Building2, roles: ['admin'] },
   { to: '/config', labelKey: 'nav_config', icon: Settings, roles: ['admin'] },
 ];
 
 /** Sidebar menu for buyers/end users (role "staff"): Dashboard, Catalog, Orders, Chat, Profile. */
 const NAV_ENTRIES_BUYER: NavItem[] = [
   { to: '/dashboard', labelKey: 'nav_dashboard', icon: LayoutDashboard },
-  { to: '/catalog', labelKey: 'nav_catalog', icon: Package },
-  { to: '/orders', labelKey: 'nav_orders', icon: ShoppingCart },
-  { to: '/chat', labelKey: 'nav_chat', icon: MessageCircle },
+  { to: '/catalog', labelKey: 'nav_catalog', icon: Package, featureKey: 'products' },
+  { to: '/orders', labelKey: 'nav_orders', icon: ShoppingCart, featureKey: 'orders' },
+  { to: '/chat', labelKey: 'nav_chat', icon: MessageCircle, featureKey: 'chat' },
   { to: '/profile', labelKey: 'nav_profile_settings', icon: User },
 ];
 
-function getVisibleNavEntries(role: string | undefined): NavEntry[] {
-  if (!role) return NAV_ENTRIES.filter((e) => !e.roles || e.roles.length === 0);
-  if (role === ROLE_STAFF) return NAV_ENTRIES_BUYER;
-  return NAV_ENTRIES.filter((e) => !e.roles || e.roles.length === 0 || e.roles.includes(role));
+function isFeatureEnabled(features: Record<string, boolean>, featureKey: string | undefined): boolean {
+  if (!featureKey) return true;
+  return features[featureKey] !== false;
+}
+
+function getVisibleNavEntries(role: string | undefined, features: Record<string, boolean>): NavEntry[] {
+  let entries: NavEntry[];
+  if (!role) {
+    entries = NAV_ENTRIES.filter((e) => !e.roles || e.roles.length === 0);
+  } else if (role === ROLE_STAFF) {
+    return NAV_ENTRIES_BUYER.filter((e) => isFeatureEnabled(features, e.featureKey));
+  } else {
+    entries = NAV_ENTRIES.filter((e) => !e.roles || e.roles.length === 0 || e.roles.includes(role));
+  }
+  return entries.filter((e) => {
+    if (isNavGroup(e)) return isFeatureEnabled(features, e.featureKey);
+    return isFeatureEnabled(features, (e as NavItem).featureKey);
+  });
 }
 
 function getInitials(name: string, email: string): string {
@@ -124,7 +144,7 @@ const navLinkInactive = 'text-white/90 hover:bg-white/10 hover:text-white';
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { displayName, logoUrl } = useBrand();
+  const { displayName, logoUrl, features } = useBrand();
   const { theme, toggleTheme } = useTheme();
   const { locale, setLocale, t } = useLanguage();
   const navigate = useNavigate();
@@ -132,7 +152,17 @@ export default function Layout() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const profileRef = useRef<HTMLDivElement>(null);
+
+  const toggleGroup = (labelKey: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(labelKey)) next.delete(labelKey);
+      else next.add(labelKey);
+      return next;
+    });
+  };
 
   const closeSidebar = () => setSidebarOpen(false);
 
@@ -145,6 +175,21 @@ export default function Layout() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Auto-expand group that contains the current path
+  useEffect(() => {
+    const pathname = location.pathname;
+    NAV_ENTRIES.forEach((entry) => {
+      if (isNavGroup(entry)) {
+        const isActive = entry.children.some(
+          (c) => c.to === pathname || (c.to !== '/products' && pathname.startsWith(c.to))
+        );
+        if (isActive) {
+          setExpandedGroups((prev) => (prev.has(entry.labelKey) ? prev : new Set(prev).add(entry.labelKey)));
+        }
+      }
+    });
+  }, [location.pathname]);
 
   const handleLogoutClick = () => {
     setProfileOpen(false);
@@ -194,37 +239,50 @@ export default function Layout() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 px-2">
-          {getVisibleNavEntries(user?.role).map((entry, idx) => {
+          {getVisibleNavEntries(user?.role, features).map((entry, idx) => {
             if (isNavGroup(entry)) {
+              const visibleChildren = entry.children.filter((c) => isFeatureEnabled(features, c.featureKey));
+              if (visibleChildren.length === 0) return null;
               const Icon = entry.icon;
               const pathname = location.pathname;
-              const isActive = entry.children.some(
+              const isActive = visibleChildren.some(
                 (c) => c.to === pathname || (c.to !== '/products' && pathname.startsWith(c.to))
               );
+              const isExpanded = expandedGroups.has(entry.labelKey);
               return (
                 <div key={entry.labelKey} className="mb-2">
-                  <div
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg ${isActive ? 'bg-white/15' : ''}`}
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(entry.labelKey)}
+                    className={`flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-medium transition-colors duration-150 ${isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:bg-white/10 hover:text-white'}`}
+                    aria-expanded={isExpanded}
                   >
-                    <Icon className="w-5 h-5 shrink-0 text-white/90" />
-                    <span className="text-sm font-medium text-white/95">{t(entry.labelKey)}</span>
-                  </div>
-                  <div className="ml-2 mt-1 flex flex-col gap-0.5 border-l-2 border-white/20 pl-3">
-                    {entry.children.map((child) => (
-                      <NavLink
-                        key={child.to}
-                        to={child.to}
-                        onClick={closeSidebar}
-                        className={({ isActive: childActive }) =>
-                          `block py-2 px-2 rounded-md text-sm transition-colors ${
-                            childActive ? 'text-white font-medium bg-white/15' : 'text-white/85 hover:bg-white/10 hover:text-white'
-                          }`
-                        }
-                      >
-                        {t(child.labelKey)}
-                      </NavLink>
-                    ))}
-                  </div>
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span className="flex-1">{t(entry.labelKey)}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 shrink-0 transition-transform" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 shrink-0 transition-transform" />
+                    )}
+                  </button>
+                  {isExpanded && (
+                    <div className="ml-2 mt-1 flex flex-col gap-0.5 border-l-2 border-white/20 pl-3">
+                      {visibleChildren.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          onClick={closeSidebar}
+                          className={({ isActive: childActive }) =>
+                            `block py-2 px-2 rounded-md text-sm transition-colors ${
+                              childActive ? 'text-white font-medium bg-white/15' : 'text-white/85 hover:bg-white/10 hover:text-white'
+                            }`
+                          }
+                        >
+                          {t(child.labelKey)}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             }

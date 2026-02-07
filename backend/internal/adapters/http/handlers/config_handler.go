@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/careplus/pharmacy-backend/internal/adapters/http/dto/response"
@@ -14,12 +15,13 @@ import (
 )
 
 type ConfigHandler struct {
-	configService inbound.PharmacyConfigService
-	logger        *zap.Logger
+	configService      inbound.PharmacyConfigService
+	activityLogService inbound.ActivityLogService
+	logger             *zap.Logger
 }
 
-func NewConfigHandler(configService inbound.PharmacyConfigService, logger *zap.Logger) *ConfigHandler {
-	return &ConfigHandler{configService: configService, logger: logger}
+func NewConfigHandler(configService inbound.PharmacyConfigService, activityLogService inbound.ActivityLogService, logger *zap.Logger) *ConfigHandler {
+	return &ConfigHandler{configService: configService, activityLogService: activityLogService, logger: logger}
 }
 
 // GetOrCreate returns config for the authenticated user's pharmacy, creating default if missing (protected).
@@ -49,6 +51,15 @@ func (h *ConfigHandler) Upsert(c *gin.Context) {
 		writeServiceError(c, err)
 		return
 	}
+	// Audit log: config changed
+	if h.activityLogService != nil {
+		details, _ := json.Marshal(map[string]interface{}{
+			"display_name": cfg.DisplayName, "primary_color": cfg.PrimaryColor, "default_language": cfg.DefaultLanguage,
+		})
+		userIDVal, _ := c.Get("user_id")
+		userID, _ := uuid.Parse(userIDVal.(string))
+		_ = h.activityLogService.Create(c.Request.Context(), pharmacyID, userID, "PUT /config", "Config updated", "config", pharmacyID.String(), string(details), c.ClientIP())
+	}
 	c.JSON(http.StatusOK, cfg)
 }
 
@@ -66,6 +77,20 @@ func (h *ConfigHandler) GetByPharmacyID(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, cfg)
+}
+
+// GetAppConfig returns tenant app config by hostname (public, no auth). Hostname from query ?hostname= or Host header.
+func (h *ConfigHandler) GetAppConfig(c *gin.Context) {
+	hostname := c.Query("hostname")
+	if hostname == "" {
+		hostname = c.Request.Host
+	}
+	cfg, err := h.configService.GetAppConfigByHostname(c.Request.Context(), hostname)
+	if err != nil {
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, cfg)

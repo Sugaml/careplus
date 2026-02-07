@@ -14,6 +14,7 @@ import (
 type PharmacyRepository interface {
 	Create(ctx context.Context, p *models.Pharmacy) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Pharmacy, error)
+	GetByHostnameSlug(ctx context.Context, hostnameSlug string) (*models.Pharmacy, error)
 	Update(ctx context.Context, p *models.Pharmacy) error
 	List(ctx context.Context) ([]*models.Pharmacy, error)
 }

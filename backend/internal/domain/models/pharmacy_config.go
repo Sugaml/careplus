@@ -7,27 +7,42 @@ import (
 	"gorm.io/gorm"
 )
 
-// PharmacyConfig holds site/display configuration per pharmacy (name, logo, banner, location, etc.).
-// One row per pharmacy.
+// FeatureFlagsMap is a map of feature key -> enabled (e.g. "products": true). Stored as JSONB.
+type FeatureFlagsMap map[string]bool
+
+// DefaultFeatureFlags returns the default set of features (all enabled) for new tenants.
+func DefaultFeatureFlags() FeatureFlagsMap {
+	return FeatureFlagsMap{
+		"products": true, "orders": true, "chat": true, "promos": true,
+		"referral": true, "memberships": true, "billing": true, "announcements": true,
+		"inventory": true, "statements": true, "categories": true, "reviews": true,
+	}
+}
+
+// PharmacyConfig holds site/display and company controls per tenant (name, logo, website on/off, features).
+// One row per pharmacy/tenant.
 type PharmacyConfig struct {
-	ID              uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
-	PharmacyID      uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex" json:"pharmacy_id"`
-	DisplayName     string         `gorm:"size:255" json:"display_name"`   // Pharmacy name for website/branding
-	Location        string         `gorm:"type:text" json:"location"`       // Address or location text
-	LogoURL         string         `gorm:"size:512" json:"logo_url"`        // URL to logo image
-	BannerURL       string         `gorm:"size:512" json:"banner_url"`     // URL to banner image
-	Tagline         string         `gorm:"size:500" json:"tagline"`         // Short tagline/slogan
-	ContactPhone    string         `gorm:"size:50" json:"contact_phone"`
-	ContactEmail    string         `gorm:"size:255" json:"contact_email"`
-	PrimaryColor    string         `gorm:"size:20" json:"primary_color"`   // e.g. #0066cc for theme
-	LicenseNo          string         `gorm:"size:100" json:"license_no"`      // Pharmacy license number (for trust badge)
-	VerifiedAt         *time.Time     `gorm:"index" json:"verified_at,omitempty"` // When pharmacy was verified (shows Verified badge)
-	EstablishedYear    int            `gorm:"default:0" json:"established_year"` // Year established (e.g. 2010)
-	ReturnRefundPolicy   string         `gorm:"type:text" json:"return_refund_policy,omitempty"`   // Return and refund policy (HTML or plain text)
-	ChatEditWindowMinutes int            `gorm:"default:10" json:"chat_edit_window_minutes"`     // Minutes within which users can edit their chat messages (admin-configurable)
+	ID                   uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
+	PharmacyID           uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex" json:"pharmacy_id"`
+	DisplayName          string         `gorm:"size:255" json:"display_name"`
+	Location             string         `gorm:"type:text" json:"location"`
+	LogoURL              string         `gorm:"size:512" json:"logo_url"`
+	BannerURL            string         `gorm:"size:512" json:"banner_url"`
+	Tagline              string         `gorm:"size:500" json:"tagline"`
+	ContactPhone         string         `gorm:"size:50" json:"contact_phone"`
+	ContactEmail         string         `gorm:"size:255" json:"contact_email"`
+	PrimaryColor         string         `gorm:"size:20" json:"primary_color"`
+	DefaultLanguage      string         `gorm:"size:16;default:en" json:"default_language"`
+	WebsiteEnabled       bool           `gorm:"default:true" json:"website_enabled"`       // Enable/disable public website for this company
+	FeatureFlags         FeatureFlagsMap `gorm:"type:jsonb;serializer:json" json:"feature_flags,omitempty"` // Per-tenant feature toggles (products, orders, chat, etc.)
+	LicenseNo            string         `gorm:"size:100" json:"license_no"`
+	VerifiedAt           *time.Time     `gorm:"index" json:"verified_at,omitempty"`
+	EstablishedYear      int            `gorm:"default:0" json:"established_year"`
+	ReturnRefundPolicy   string         `gorm:"type:text" json:"return_refund_policy,omitempty"`
+	ChatEditWindowMinutes int           `gorm:"default:10" json:"chat_edit_window_minutes"`
 	CreatedAt            time.Time      `json:"created_at"`
 	UpdatedAt            time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	DeletedAt            gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Pharmacy *Pharmacy `gorm:"foreignKey:PharmacyID" json:"pharmacy,omitempty"`
 }

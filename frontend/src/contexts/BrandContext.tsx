@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { configApi, publicStoreApi } from '@/lib/api';
+import { configApi, fetchAppConfig, publicStoreApi } from '@/lib/api';
 
 const DEFAULT_DISPLAY_NAME = 'CarePlus Pharmacy';
 const DEFAULT_PRIMARY = '#0d9488';
@@ -31,6 +31,10 @@ export interface BrandState {
   loading: boolean;
   /** When on public store: selected pharmacy id (for policy/config by pharmacy). */
   publicPharmacyId: string | null;
+  /** Company website enabled (from app-config or config). When false, public site can show "disabled" message. */
+  websiteEnabled: boolean;
+  /** Per-tenant feature flags (products, orders, chat, etc.). Empty = all enabled for backward compat. */
+  features: Record<string, boolean>;
 }
 
 interface BrandContextValue extends BrandState {
@@ -48,6 +52,8 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [publicPharmacyId, setPublicPharmacyId] = useState<string | null>(null);
+  const [websiteEnabled, setWebsiteEnabled] = useState(true);
+  const [features, setFeatures] = useState<Record<string, boolean>>({});
 
   const loadBrand = useCallback(async () => {
     setLoading(true);
@@ -58,23 +64,45 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
         setLogoUrl(config.logo_url || null);
         setPrimaryColor(config.primary_color || null);
         setVerifiedAt(config.verified_at ?? null);
+        setWebsiteEnabled(config.website_enabled ?? true);
+        setFeatures(config.feature_flags ?? {});
         applyBrandToDocument(config.primary_color || null);
       } else {
-        const pharmacies = await publicStoreApi.listPharmacies();
-        const pharmacyId = publicPharmacyId || (pharmacies[0]?.id ?? null);
-        if (pharmacyId) {
-          const config = await publicStoreApi.getConfig(pharmacyId);
-          setDisplayName(config.display_name || DEFAULT_DISPLAY_NAME);
-          setLogoUrl(config.logo_url || null);
-          setPrimaryColor(config.primary_color || null);
-          setVerifiedAt(config.verified_at ?? null);
-          applyBrandToDocument(config.primary_color || null);
+        // Public: try /app-config by hostname first (multi-tenant); fallback to pharmacy list
+        let appConfig = await fetchAppConfig();
+        if (!appConfig && (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))) {
+          appConfig = await fetchAppConfig('careplus');
+        }
+        if (appConfig) {
+          setDisplayName(appConfig.company_name || DEFAULT_DISPLAY_NAME);
+          setLogoUrl(appConfig.logo_url || null);
+          setPrimaryColor(appConfig.default_theme || null);
+          setVerifiedAt(appConfig.verified_at ?? null);
+          setWebsiteEnabled(appConfig.website_enabled ?? true);
+          setFeatures(appConfig.features ?? {});
+          applyBrandToDocument(appConfig.default_theme || null);
+          setPublicPharmacyId(appConfig.pharmacy_id);
         } else {
-          setDisplayName(DEFAULT_DISPLAY_NAME);
-          setLogoUrl(null);
-          setPrimaryColor(null);
-          setVerifiedAt(null);
-          applyBrandToDocument(null);
+          const pharmacies = await publicStoreApi.listPharmacies();
+          const pharmacyId = publicPharmacyId || (pharmacies[0]?.id ?? null);
+          if (pharmacyId) {
+            const config = await publicStoreApi.getConfig(pharmacyId);
+            setDisplayName(config.display_name || DEFAULT_DISPLAY_NAME);
+            setLogoUrl(config.logo_url || null);
+            setPrimaryColor(config.primary_color || null);
+            setVerifiedAt(config.verified_at ?? null);
+            setWebsiteEnabled(config.website_enabled ?? true);
+            setFeatures(config.feature_flags ?? {});
+            applyBrandToDocument(config.primary_color || null);
+          } else {
+            setDisplayName(DEFAULT_DISPLAY_NAME);
+            setLogoUrl(null);
+            setPrimaryColor(null);
+            setVerifiedAt(null);
+            setWebsiteEnabled(true);
+            setFeatures({});
+            applyBrandToDocument(null);
+          }
         }
       }
     } catch {
@@ -82,6 +110,8 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
       setLogoUrl(null);
       setPrimaryColor(null);
       setVerifiedAt(null);
+      setWebsiteEnabled(true);
+      setFeatures({});
       applyBrandToDocument(null);
     } finally {
       setLoading(false);
@@ -107,6 +137,8 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     verifiedAt,
     loading,
     publicPharmacyId,
+    websiteEnabled,
+    features,
     setPublicPharmacyId: setPublicPharmacyIdCb,
     refreshBrand,
   };

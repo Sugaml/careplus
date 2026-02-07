@@ -4,7 +4,7 @@ import { authApi, User } from '@/lib/api';
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
   setToken: (access: string, refresh?: string) => void;
   refreshUser: () => Promise<void>;
@@ -44,12 +44,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('careplus_access_token', res.access_token);
     if (res.refresh_token) localStorage.setItem('careplus_refresh_token', res.refresh_token);
     setUser(res.user);
+    return res.user;
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('careplus_access_token');
-    localStorage.removeItem('careplus_refresh_token');
-    setUser(null);
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // ignore (e.g. already expired)
+    } finally {
+      localStorage.removeItem('careplus_access_token');
+      localStorage.removeItem('careplus_refresh_token');
+      setUser(null);
+    }
   }, []);
 
   const setToken = useCallback((access: string, refresh?: string) => {

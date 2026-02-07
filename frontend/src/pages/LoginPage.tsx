@@ -37,8 +37,9 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      await login(email, password);
-      navigate(returnTo);
+      const user = await login(email, password);
+      const destination = user?.role === 'pharmacist' ? '/dashboard' : returnTo;
+      navigate(destination);
     } catch (err) {
       if (err instanceof ApiError && err.fields) {
         setFieldErrors(err.fields);
@@ -57,8 +58,9 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(userEmail, userPassword);
-      navigate(returnTo);
+      const user = await login(userEmail, userPassword);
+      const destination = user?.role === 'pharmacist' ? '/dashboard' : returnTo;
+      navigate(destination);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
       setError(

@@ -28,13 +28,25 @@ interface WebsiteLayoutProps {
 
 export default function WebsiteLayout({ children, showCart, onCartClick, cartCount = 0 }: WebsiteLayoutProps) {
   const { user, logout } = useAuth();
-  const { displayName, logoUrl, verifiedAt } = useBrand();
+  const { displayName, logoUrl, verifiedAt, websiteEnabled, loading } = useBrand();
   const { theme, toggleTheme } = useTheme();
   const { locale, setLocale, t } = useLanguage();
   const navigate = useNavigate();
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // When company website is disabled, show message to public visitors (logged-in users still see dashboard)
+  if (!user && !loading && !websiteEnabled) {
+    return (
+      <div className="min-h-screen bg-theme-bg flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md">
+          <h1 className="text-xl font-semibold text-theme-text mb-2">Website temporarily unavailable</h1>
+          <p className="text-theme-muted">This company website is currently disabled. Please check back later.</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/careplus/pharmacy-backend/internal/adapters/http/dto/response"
@@ -12,12 +13,13 @@ import (
 )
 
 type UsersHandler struct {
-	userService inbound.UserService
-	logger      *zap.Logger
+	userService        inbound.UserService
+	activityLogService inbound.ActivityLogService
+	logger             *zap.Logger
 }
 
-func NewUsersHandler(userService inbound.UserService, logger *zap.Logger) *UsersHandler {
-	return &UsersHandler{userService: userService, logger: logger}
+func NewUsersHandler(userService inbound.UserService, activityLogService inbound.ActivityLogService, logger *zap.Logger) *UsersHandler {
+	return &UsersHandler{userService: userService, activityLogService: activityLogService, logger: logger}
 }
 
 // List returns users for the pharmacy; manager sees only pharmacists (enforced by service).
@@ -158,6 +160,25 @@ func (h *UsersHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: err.Error()})
 		return
 	}
+	// Audit log: what changed
+	if h.activityLogService != nil {
+		changes := make(map[string]interface{})
+		if req.Name != "" {
+			changes["name"] = req.Name
+		}
+		if req.Role != "" {
+			changes["role"] = req.Role
+		}
+		if req.IsActive != nil {
+			changes["is_active"] = *req.IsActive
+		}
+		if len(changes) > 0 {
+			details, _ := json.Marshal(map[string]interface{}{"user_id": userID.String(), "changes": changes})
+			actorIDVal, _ := c.Get("user_id")
+			actorID, _ := uuid.Parse(actorIDVal.(string))
+			_ = h.activityLogService.Create(c.Request.Context(), pharmacyID, actorID, "PUT /users/"+userID.String(), "User updated", "user", userID.String(), string(details), c.ClientIP())
+		}
+	}
 	c.JSON(http.StatusOK, user)
 }
 
@@ -189,6 +210,13 @@ func (h *UsersHandler) Deactivate(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: err.Error()})
 		return
+	}
+	// Audit log: user deactivated (enable/disable)
+	if h.activityLogService != nil {
+		details, _ := json.Marshal(map[string]interface{}{"user_id": userID.String(), "is_active": false})
+		actorIDVal, _ := c.Get("user_id")
+		actorID, _ := uuid.Parse(actorIDVal.(string))
+		_ = h.activityLogService.Create(c.Request.Context(), pharmacyID, actorID, "POST /users/"+userID.String()+"/deactivate", "User deactivated", "user", userID.String(), string(details), c.ClientIP())
 	}
 	c.JSON(http.StatusOK, user)
 }
