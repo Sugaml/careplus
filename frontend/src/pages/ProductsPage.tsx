@@ -22,6 +22,7 @@ const initialForm = {
   category: '',
   category_id: '', // optional: FK to category (parent or subcategory); product type = category + subcategory
   unit_price: 0,
+  discount_percent: 0,
   currency: 'NPR',
   stock_quantity: 0,
   unit: 'units',
@@ -368,6 +369,7 @@ export default function ProductsPage() {
     category: form.category.trim() || undefined,
     category_id: form.category_id.trim() || undefined,
     unit_price: form.unit_price,
+    discount_percent: form.discount_percent ?? 0,
     currency: form.currency || 'NPR',
     stock_quantity: form.stock_quantity,
     unit: form.unit || 'units',
@@ -1233,6 +1235,24 @@ export default function ProductsPage() {
                         {productFieldErrors.unit_price && <p className="mt-1 text-sm text-red-600">{productFieldErrors.unit_price}</p>}
                       </div>
                       <div>
+                        <label htmlFor="discount_percent" className="block text-sm font-medium text-gray-700 mb-1">
+                          Discount %
+                        </label>
+                        <input
+                          id="discount_percent"
+                          name="discount_percent"
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={form.discount_percent == null || form.discount_percent === '' ? '' : Number(form.discount_percent)}
+                          onChange={(e) => handleChange(e)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-careplus-primary"
+                          placeholder="0"
+                        />
+                        <p className="text-xs text-gray-500 mt-0.5">0–100. When set, unit price is the sale price.</p>
+                      </div>
+                      <div>
                         <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">
                           Currency
                         </label>
@@ -1540,6 +1560,8 @@ export default function ProductsPage() {
                       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                         <dt className="text-gray-500">Unit price</dt>
                         <dd>{form.currency} {form.unit_price}</dd>
+                        <dt className="text-gray-500">Discount %</dt>
+                        <dd>{(form.discount_percent ?? 0) > 0 ? `${form.discount_percent}%` : '—'}</dd>
                         <dt className="text-gray-500">Stock / unit</dt>
                         <dd>{form.stock_quantity} {form.unit}</dd>
                       </dl>

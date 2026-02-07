@@ -16,6 +16,7 @@ type Product struct {
 	Category           string         `gorm:"size:100;index" json:"category"`       // denormalized name for filter/display; synced from Category when CategoryID set
 	CategoryID         *uuid.UUID     `gorm:"type:uuid;index" json:"category_id,omitempty"` // optional FK: product type = category (parent) + subcategory (child)
 	UnitPrice          float64        `gorm:"type:decimal(12,2);not null" json:"unit_price"`
+	DiscountPercent    float64        `gorm:"type:decimal(5,2);default:0" json:"discount_percent"` // 0–100; when > 0, unit_price is sale price
 	Currency           string         `gorm:"size:10;default:NPR" json:"currency"`
 	StockQuantity      int            `gorm:"default:0" json:"stock_quantity"`
 	Unit               string         `gorm:"size:50;default:units" json:"unit"`

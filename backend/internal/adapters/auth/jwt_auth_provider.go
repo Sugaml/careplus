@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const chatCustomerTokenExpiry = 24 * time.Hour
+
 type JWTAuthProvider struct {
 	cfg *config.Config
 }
@@ -99,4 +101,50 @@ func (j *JWTAuthProvider) ValidateRefreshToken(tokenString string) (uuid.UUID, e
 		return uuid.Nil, errors.New("invalid token claims")
 	}
 	return uuid.Parse(claims.UserID)
+}
+
+type chatCustomerClaims struct {
+	PharmacyID string `json:"pharmacy_id"`
+	CustomerID string `json:"customer_id"`
+	TokenType  string `json:"token_type"`
+	jwt.RegisteredClaims
+}
+
+func (j *JWTAuthProvider) GenerateChatCustomerToken(pharmacyID, customerID uuid.UUID) (string, error) {
+	claims := chatCustomerClaims{
+		PharmacyID: pharmacyID.String(),
+		CustomerID: customerID.String(),
+		TokenType:  "chat_customer",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(chatCustomerTokenExpiry)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    j.cfg.JWT.Issuer,
+			Subject:   customerID.String(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(j.cfg.JWT.AccessSecret))
+}
+
+func (j *JWTAuthProvider) ValidateChatCustomerToken(tokenString string) (*outbound.ChatCustomerClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &chatCustomerClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(j.cfg.JWT.AccessSecret), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("invalid token: %w", err)
+	}
+	claims, ok := token.Claims.(*chatCustomerClaims)
+	if !ok || !token.Valid || claims.TokenType != "chat_customer" {
+		return nil, errors.New("invalid token claims")
+	}
+	pid, _ := uuid.Parse(claims.PharmacyID)
+	cid, _ := uuid.Parse(claims.CustomerID)
+	var exp time.Time
+	if claims.ExpiresAt != nil {
+		exp = claims.ExpiresAt.Time
+	}
+	return &outbound.ChatCustomerClaims{PharmacyID: pid, CustomerID: cid, ExpiresAt: exp}, nil
 }

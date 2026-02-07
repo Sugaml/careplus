@@ -71,14 +71,20 @@ export default function InventoryPage() {
 
   useEffect(() => {
     if (addModalOpen && isManagerOrAdmin) {
-      productApi.list().then((list) => setProducts(list ?? [])).catch(() => setProducts([]));
-      setAddForm({ product_id: products[0]?.id ?? '', batch_number: '', quantity: 0, expiry_date: '' });
+      productApi
+        .list()
+        .then((list) => {
+          const items = Array.isArray(list) ? list : (list as { items?: Product[] })?.items ?? [];
+          setProducts(items);
+        })
+        .catch(() => setProducts([]));
+      setAddForm((prev) => ({ ...prev, product_id: '', batch_number: '', quantity: 0, expiry_date: '' }));
       setSubmitError('');
     }
   }, [addModalOpen, isManagerOrAdmin]);
 
   useEffect(() => {
-    if (addModalOpen && products.length && !addForm.product_id) {
+    if (addModalOpen && products.length > 0 && !addForm.product_id) {
       setAddForm((f) => ({ ...f, product_id: products[0].id }));
     }
   }, [addModalOpen, products, addForm.product_id]);
@@ -242,18 +248,18 @@ export default function InventoryPage() {
                   type="button"
                   onClick={handleExportExcel}
                   disabled={exporting}
-                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-theme-text hover:bg-theme-hover disabled:opacity-50"
+                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-theme-text hover:bg-theme-hover disabled:opacity-50 dark:hover:bg-theme-muted/30"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                  <FileSpreadsheet className="w-4 h-4 text-green-600 dark:text-green-400" />
                   {t('inventory_export_excel')}
                 </button>
                 <button
                   type="button"
                   onClick={handleExportPdf}
                   disabled={exporting}
-                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-theme-text hover:bg-theme-hover disabled:opacity-50"
+                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-theme-text hover:bg-theme-hover disabled:opacity-50 dark:hover:bg-theme-muted/30"
                 >
-                  <FileText className="w-4 h-4 text-red-600" />
+                  <FileText className="w-4 h-4 text-red-600 dark:text-red-400" />
                   {t('inventory_export_pdf')}
                 </button>
               </div>
@@ -283,7 +289,7 @@ export default function InventoryPage() {
         </div>
       )}
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">{error}</div>
       )}
 
       {loading ? (
@@ -306,8 +312,18 @@ export default function InventoryPage() {
               <tbody className="divide-y divide-theme-border">
                 {batches.length === 0 ? (
                   <tr>
-                    <td colSpan={isManagerOrAdmin ? 5 : 4} className="px-4 py-8 text-center text-theme-muted">
-                      {t('inventory_empty')}
+                    <td colSpan={isManagerOrAdmin ? 5 : 4} className="px-4 py-8 text-center">
+                      <p className="text-theme-muted mb-2">{t('inventory_empty')}</p>
+                      {isManagerOrAdmin && (
+                        <button
+                          type="button"
+                          onClick={handleOpenAdd}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-careplus-primary text-white text-sm font-medium hover:bg-careplus-secondary transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {t('inventory_add_batch')}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -363,11 +379,19 @@ export default function InventoryPage() {
                   value={addForm.product_id}
                   onChange={(e) => setAddForm((f) => ({ ...f, product_id: e.target.value }))}
                   className="w-full border border-theme-border rounded-lg px-3 py-2 bg-white dark:bg-theme-bg text-theme-text"
+                  disabled={products.length === 0}
                 >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
+                  {products.length === 0 ? (
+                    <option value="">—</option>
+                  ) : (
+                    products.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))
+                  )}
                 </select>
+                {products.length === 0 && (
+                  <p className="text-theme-muted text-xs mt-1">{t('no_products_available')} Add products in Manage → Products first.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text mb-1">{t('inventory_batch_number')}</label>
@@ -404,7 +428,7 @@ export default function InventoryPage() {
               <button type="button" onClick={handleCloseAdd} className="px-4 py-2 rounded-lg border border-theme-border text-theme-text hover:bg-theme-hover">
                 {t('cancel')}
               </button>
-              <button type="button" onClick={handleAddSubmit} disabled={submitting} className="px-4 py-2 bg-careplus-primary text-white rounded-lg hover:bg-careplus-secondary disabled:opacity-50">
+              <button type="button" onClick={handleAddSubmit} disabled={submitting || products.length === 0} className="px-4 py-2 bg-careplus-primary text-white rounded-lg hover:bg-careplus-secondary disabled:opacity-50">
                 {submitting ? t('loading') : t('save')}
               </button>
             </div>

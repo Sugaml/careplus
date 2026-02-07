@@ -39,7 +39,8 @@ export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { addItem } = useCart();
+  const { items, addItem, removeItem, updateQuantity, totalCount } = useCart();
+  const [cartOpen, setCartOpen] = useState(false);
   const { t } = useLanguage();
   const [product, setProduct] = useState<Product | null>(null);
   const [reviews, setReviews] = useState<ProductReviewWithMeta[]>([]);
@@ -201,6 +202,7 @@ export default function ProductDetailPage() {
       return;
     }
     addItem(product, 1);
+    setCartOpen(true);
   };
 
   if (loading) return <Loader variant="fullPage" message="Loading product…" />;
@@ -222,7 +224,11 @@ export default function ProductDetailPage() {
     : 0;
 
   return (
-    <WebsiteLayout showCart>
+    <WebsiteLayout
+      showCart
+      onCartClick={() => setCartOpen(true)}
+      cartCount={totalCount}
+    >
       <div className="max-w-4xl mx-auto px-4 py-8">
         <Link to="/products" className="inline-flex items-center gap-1 text-careplus-primary hover:underline mb-6">
           <ArrowLeft className="w-4 h-4" /> Back to products
@@ -387,10 +393,29 @@ export default function ProductDetailPage() {
                 ))}
               </div>
               <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
-              <p className="mt-2 text-careplus-primary font-semibold text-lg">
-                {product.currency} {product.unit_price.toFixed(2)}
-                {product.unit && <span className="text-gray-500 font-normal"> / {product.unit}</span>}
-              </p>
+              {(product.discount_percent ?? 0) > 0 && (
+                <span className="inline-flex mt-2 px-2.5 py-1 rounded-lg text-sm font-medium bg-emerald-600 text-white">
+                  {Math.round(product.discount_percent)}% off
+                </span>
+              )}
+              <div className="mt-2">
+                {(product.discount_percent ?? 0) > 0 ? (
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-base text-gray-500 line-through">
+                      {product.currency} {(product.unit_price / (1 - (product.discount_percent! / 100))).toFixed(2)}
+                    </span>
+                    <span className="text-careplus-primary font-semibold text-lg">
+                      {product.currency} {product.unit_price.toFixed(2)}
+                      {product.unit && <span className="text-gray-500 font-normal"> / {product.unit}</span>}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-careplus-primary font-semibold text-lg">
+                    {product.currency} {product.unit_price.toFixed(2)}
+                    {product.unit && <span className="text-gray-500 font-normal"> / {product.unit}</span>}
+                  </p>
+                )}
+              </div>
               <p className={`text-sm mt-1 ${product.stock_quantity > 0 ? 'text-gray-500' : 'text-amber-600'}`}>
                 {product.stock_quantity > 0 ? `In stock: ${product.stock_quantity}` : 'Out of stock'}
               </p>
@@ -745,6 +770,108 @@ export default function ProductDetailPage() {
           </div>
         </section>
       </div>
+
+      {/* Cart drawer */}
+      {cartOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+            onClick={() => setCartOpen(false)}
+            aria-hidden
+          />
+          <div className="fixed top-0 right-0 w-full max-w-md h-full bg-white dark:bg-gray-900 shadow-2xl z-50 flex flex-col border-l border-gray-200 dark:border-gray-700">
+            <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                {t('cart_items', { count: totalCount })}
+              </h2>
+              <button
+                onClick={() => setCartOpen(false)}
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-2xl leading-none"
+                aria-label="Close cart"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-5">
+              {items.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    <Package className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-gray-900 dark:text-white font-medium">{t('your_cart_empty')}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Add items from the product page to get started.
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-4">
+                  {items.map((i) => (
+                    <li
+                      key={i.product.id}
+                      className="flex gap-4 items-center p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700"
+                    >
+                      {productImageUrl(i.product) ? (
+                        <img
+                          src={resolveImageUrl(productImageUrl(i.product))}
+                          alt=""
+                          className="w-14 h-14 rounded-xl object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center shrink-0">
+                          <Package className="w-7 h-7 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-gray-900 dark:text-white truncate">
+                          {i.product.name}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          {i.product.currency} {i.product.unit_price.toFixed(2)} × {i.quantity}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={i.product.stock_quantity ?? undefined}
+                          value={i.quantity}
+                          onChange={(e) =>
+                            updateQuantity(i.product.id, parseInt(e.target.value, 10) || 1)
+                          }
+                          className="w-14 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-center text-gray-900 dark:text-white text-sm"
+                        />
+                        <button
+                          onClick={() => removeItem(i.product.id)}
+                          className="text-red-600 dark:text-red-400 text-sm font-medium hover:underline"
+                        >
+                          {t('remove')}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {items.length > 0 && (
+              <div className="p-5 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {t('total')}: {product?.currency ?? 'NPR'}{' '}
+                  {items
+                    .reduce((sum, i) => sum + i.product.unit_price * i.quantity, 0)
+                    .toFixed(2)}
+                </p>
+                <Link
+                  to="/products"
+                  onClick={() => setCartOpen(false)}
+                  className="block w-full py-3 text-center rounded-xl bg-careplus-primary text-white font-semibold hover:bg-careplus-secondary transition-colors"
+                >
+                  Continue to checkout
+                </Link>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </WebsiteLayout>
   );
 }

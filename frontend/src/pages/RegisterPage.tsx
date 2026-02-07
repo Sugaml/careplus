@@ -12,7 +12,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState('staff');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -50,7 +49,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      await authApi.register({ pharmacy_id: pharmacyId, email, password, name: name || undefined, role: role || undefined });
+      await authApi.register({ pharmacy_id: pharmacyId, email, password, name: name || undefined, role: 'staff' });
       navigate('/login?registered=1');
     } catch (err) {
       if (err instanceof ApiError && err.fields) {
@@ -132,18 +131,9 @@ export default function RegisterPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth_role_optional')}</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
-              >
-                <option value="staff">{t('auth_staff')}</option>
-                <option value="pharmacist">{t('auth_pharmacist')}</option>
-                <option value="admin">{t('auth_admin')}</option>
-              </select>
-            </div>
+            <p className="text-xs text-gray-500">
+              {t('auth_register_as_customer')}
+            </p>
             <div className={`flex items-start gap-3 p-3 rounded-lg border ${fieldErrors.agreedToTerms ? 'border-red-500 bg-red-50 dark:bg-red-950/20' : 'border-gray-300 dark:border-theme-border'}`}>
               <input
                 type="checkbox"

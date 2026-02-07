@@ -30,6 +30,16 @@ function getToken(): string | null {
   return localStorage.getItem('careplus_access_token');
 }
 
+/** Chat token for customer chat (from link). If set, used for /chat/* requests; else staff uses access token. */
+export function getChatToken(): string | null {
+  return localStorage.getItem('careplus_chat_token');
+}
+
+export function setChatToken(token: string | null): void {
+  if (token) localStorage.setItem('careplus_chat_token', token);
+  else localStorage.removeItem('careplus_chat_token');
+}
+
 function throwOnNotOk(res: Response, data: { message?: string; code?: string; fields?: Record<string, string> }): never {
   const message = data?.message || res.statusText;
   if (res.status === 400 && data?.fields && Object.keys(data.fields).length > 0) {
@@ -73,6 +83,43 @@ export async function apiUpload<T>(path: string, formData: FormData, method = 'P
   return data as T;
 }
 
+/** Token for chat API/WS: customer chat token if in customer chat context, else staff access token. */
+export function getChatAuthToken(): string | null {
+  return getChatToken() || getToken();
+}
+
+/** Chat API requests use chat token (customer) or access token (staff). */
+async function apiChat<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getChatAuthToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const data = await res.json().catch(() => ({})) as { message?: string; code?: string; fields?: Record<string, string> };
+  if (!res.ok) {
+    throwOnNotOk(res, data);
+  }
+  return data as T;
+}
+
+async function apiChatUpload<T>(path: string, formData: FormData, method = 'POST'): Promise<T> {
+  const token = getChatAuthToken();
+  const headers: HeadersInit = {};
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${API_BASE}${path}`, { method, headers, body: formData });
+  const data = await res.json().catch(() => ({})) as { message?: string; code?: string; fields?: Record<string, string> };
+  if (!res.ok) {
+    throwOnNotOk(res, data);
+  }
+  return data as T;
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     api<{ access_token: string; refresh_token: string; user: User }>('/auth/login', {
@@ -96,6 +143,54 @@ export const authApi = {
     }),
 };
 
+export interface UserAddress {
+  id: string;
+  user_id: string;
+  label: string;
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+  phone: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const addressesApi = {
+  list: () => api<UserAddress[]>('/auth/me/addresses'),
+  create: (body: {
+    label?: string;
+    line1: string;
+    line2?: string;
+    city: string;
+    state?: string;
+    postal_code?: string;
+    country: string;
+    phone?: string;
+    set_as_default?: boolean;
+  }) => api<UserAddress>('/auth/me/addresses', { method: 'POST', body: JSON.stringify(body) }),
+  update: (
+    id: string,
+    body: {
+      label?: string;
+      line1?: string;
+      line2?: string;
+      city?: string;
+      state?: string;
+      postal_code?: string;
+      country?: string;
+      phone?: string;
+      set_as_default?: boolean;
+    }
+  ) => api<UserAddress>(`/auth/me/addresses/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: (id: string) => api<{ message: string }>(`/auth/me/addresses/${id}`, { method: 'DELETE' }),
+  setDefault: (id: string) =>
+    api<UserAddress>(`/auth/me/addresses/${id}/default`, { method: 'PATCH' }),
+};
+
 export const pharmacyApi = {
   list: () => api<Pharmacy[]>('/pharmacies'),
   get: (id: string) => api<Pharmacy>(`/pharmacies/${id}`),
@@ -107,10 +202,40 @@ export const pharmacyApi = {
 export type CatalogSort = 'name' | 'price_asc' | 'price_desc' | 'newest';
 
 /** Public store API (no auth required) – for browsing products without login */
+/** Payment gateway (e.g. eSewa, Khalti, QR, Cash on Delivery, Fonepay) – shown in checkout. */
+export interface PaymentGateway {
+  id: string;
+  pharmacy_id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** List payment gateways (public – for checkout). Use publicStoreApi.listPaymentGateways(pharmacyId). */
+export const paymentGatewaysApi = {
+  /** List gateways for current pharmacy (auth). ?active=true for active only. */
+  list: (params?: { active?: boolean }) => {
+    const q = params?.active === true ? '?active=true' : '';
+    return api<PaymentGateway[]>(`/payment-gateways${q}`);
+  },
+  get: (id: string) => api<PaymentGateway>(`/payment-gateways/${id}`),
+  create: (body: { code: string; name: string; is_active?: boolean; sort_order?: number }) =>
+    api<PaymentGateway>('/payment-gateways', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: { code?: string; name?: string; is_active?: boolean; sort_order?: number }) =>
+    api<PaymentGateway>(`/payment-gateways/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: (id: string) => api<{ message: string }>(`/payment-gateways/${id}`, { method: 'DELETE' }),
+};
+
 export const publicStoreApi = {
   listPharmacies: () => api<Pharmacy[]>('/public/pharmacies'),
   getPharmacy: (id: string) => api<Pharmacy>(`/public/pharmacies/${id}`),
   getConfig: (pharmacyId: string) => api<PharmacyConfig>(`/public/pharmacies/${pharmacyId}/config`),
+  /** Active payment gateways for checkout (public). */
+  listPaymentGateways: (pharmacyId: string) =>
+    api<PaymentGateway[]>(`/public/pharmacies/${pharmacyId}/payment-gateways`),
   /** Categories for a pharmacy (public, for catalog filters) */
   listCategories: (pharmacyId: string) => api<Category[]>(`/public/pharmacies/${pharmacyId}/categories`),
   listProducts: (pharmacyId: string, params?: { category?: string; in_stock?: string }) => {
@@ -178,6 +303,53 @@ export interface DashboardStats {
 
 export const dashboardApi = {
   getStats: () => api<DashboardStats>('/dashboard/stats'),
+  getActiveAnnouncements: () => api<Announcement[]>('/announcements/active'),
+};
+
+/** Announcements shown as dashboard popups (offers, open/closed status, events). */
+export interface Announcement {
+  id: string;
+  pharmacy_id: string;
+  type: 'offer' | 'status' | 'event';
+  template: 'celebration' | 'banner' | 'modal';
+  title: string;
+  body: string;
+  image_url?: string;
+  link_url?: string;
+  display_seconds: number;
+  valid_days: number;
+  show_terms: boolean;
+  terms_text: string;
+  allow_skip_all: boolean;
+  start_at?: string | null;
+  end_at?: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const announcementApi = {
+  list: (params?: { active?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.active !== undefined) q.set('active', String(params.active));
+    const s = q.toString();
+    return api<Announcement[]>(`/announcements${s ? `?${s}` : ''}`);
+  },
+  get: (id: string) => api<Announcement>(`/announcements/${id}`),
+  create: (body: Partial<Announcement> & { type: string; title: string }) =>
+    api<Announcement>('/announcements', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<Announcement>) =>
+    api<Announcement>(`/announcements/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: (id: string) =>
+    api<{ message: string }>(`/announcements/${id}`, { method: 'DELETE' }),
+  acknowledge: (id: string, skipAll = false) =>
+    api<{ message: string }>(`/announcements/${id}/ack`, {
+      method: 'POST',
+      body: JSON.stringify({ skip_all: skipAll }),
+    }),
+  skipAll: () =>
+    api<{ message: string }>('/announcements/skip-all', { method: 'POST' }),
 };
 
 export interface Category {
@@ -541,6 +713,8 @@ export interface PharmacyConfig {
   license_no?: string;
   verified_at?: string | null;
   established_year?: number;
+  return_refund_policy?: string | null;
+  chat_edit_window_minutes?: number;
   created_at: string;
   updated_at: string;
 }
@@ -615,6 +789,8 @@ export interface Product {
   category_id?: string | null;
   category_detail?: ProductCategoryDetail | null;
   unit_price: number;
+  /** 0–100; when > 0, unit_price is sale price. Shown as "X% off" on cards. */
+  discount_percent?: number;
   currency: string;
   stock_quantity: number;
   unit: string;
@@ -676,6 +852,26 @@ export interface CreateOrderBody {
   promo_code?: string;
   referral_code?: string;
   points_to_redeem?: number;
+  /** Optional: selected payment gateway ID for mock payment (e.g. eSewa, Khalti, QR, COD, Fonepay). */
+  payment_gateway_id?: string;
+}
+
+/** Discount code (pharmacy-scoped) for billing and checkout. */
+export interface PromoCode {
+  id: string;
+  pharmacy_id: string;
+  code: string;
+  discount_type: 'percent' | 'fixed';
+  discount_value: number;
+  min_order_amount: number;
+  valid_from: string;
+  valid_until: string;
+  max_uses: number;
+  used_count: number;
+  is_active: boolean;
+  first_order_only: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 /** Result of validating a promo code (auth required). */
@@ -691,6 +887,12 @@ export const promoCodeApi = {
       method: 'POST',
       body: JSON.stringify({ code: code.trim(), sub_total }),
     }),
+  list: () => api<PromoCode[]>('/promo-codes'),
+  get: (id: string) => api<PromoCode>(`/promo-codes/${id}`),
+  create: (body: Partial<PromoCode> & { code: string; discount_type: string; discount_value: number; valid_from: string; valid_until: string }) =>
+    api<PromoCode>('/promo-codes', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<PromoCode>) =>
+    api<PromoCode>(`/promo-codes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
 };
 
 /** Referral & points (public validate; auth for config and customers) */
@@ -800,6 +1002,89 @@ export interface InvoiceView {
   order: Order;
   payments: Payment[];
 }
+
+// --- Chat ---
+export interface Conversation {
+  id: string;
+  pharmacy_id: string;
+  customer_id?: string;
+  user_id?: string;
+  last_message_at?: string;
+  created_at: string;
+  updated_at: string;
+  customer?: Customer;
+  pharmacy?: Pharmacy;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  sender_type: 'user' | 'customer';
+  sender_id: string;
+  body: string;
+  attachment_url?: string;
+  attachment_name?: string;
+  attachment_type?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface ChatConversationsResponse {
+  items: Conversation[];
+  total: number;
+}
+
+export interface ChatMessagesResponse {
+  items: ChatMessage[];
+  total: number;
+}
+
+export const chatApi = {
+  listConversations: (params?: { limit?: number; offset?: number }) => {
+    const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+    return apiChat<ChatConversationsResponse>(`/chat/conversations${q ? `?${q}` : ''}`);
+  },
+  createConversation: (customerId: string) =>
+    apiChat<Conversation>('/chat/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ customer_id: customerId }),
+    }),
+  getConversation: (id: string) => apiChat<Conversation>(`/chat/conversations/${id}`),
+  getMyConversation: () => apiChat<Conversation>('/chat/me'),
+  listMessages: (id: string, params?: { limit?: number; offset?: number }) => {
+    const q = params ? new URLSearchParams(params as Record<string, string>).toString() : '';
+    return apiChat<ChatMessagesResponse>(`/chat/conversations/${id}/messages${q ? `?${q}` : ''}`);
+  },
+  sendMessage: (
+    conversationId: string,
+    body: {
+      body?: string;
+      attachment_url?: string;
+      attachment_name?: string;
+      attachment_type?: string;
+    }
+  ) =>
+    apiChat<ChatMessage>(`/chat/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  issueCustomerToken: (customerId: string) =>
+    apiChat<{ token: string }>('/chat/customer-token', {
+      method: 'POST',
+      body: JSON.stringify({ customer_id: customerId }),
+    }),
+  upload: (formData: FormData) => apiChatUpload<{ url: string; path: string; filename: string }>('/chat/upload', formData),
+  getSettings: () => apiChat<{ chat_edit_window_minutes: number }>('/chat/settings'),
+  editMessage: (conversationId: string, messageId: string, body: string) =>
+    apiChat<ChatMessage>(`/chat/conversations/${conversationId}/messages/${messageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    }),
+  deleteMessage: (conversationId: string, messageId: string) =>
+    apiChat<void>(`/chat/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' }),
+  deleteConversation: (conversationId: string) =>
+    apiChat<void>(`/chat/conversations/${conversationId}`, { method: 'DELETE' }),
+};
 
 export const invoiceApi = {
   list: () => api<Invoice[]>('/invoices'),

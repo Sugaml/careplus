@@ -53,6 +53,16 @@ func (r *orderRepo) ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, st
 	return list, err
 }
 
+func (r *orderRepo) ListByPharmacyAndCreatedBy(ctx context.Context, pharmacyID uuid.UUID, createdBy uuid.UUID, status *string) ([]*models.Order, error) {
+	q := r.db.WithContext(ctx).Where("pharmacy_id = ? AND created_by = ?", pharmacyID, createdBy)
+	if status != nil && *status != "" {
+		q = q.Where("status = ?", *status)
+	}
+	var list []*models.Order
+	err := q.Order("created_at DESC").Find(&list).Error
+	return list, err
+}
+
 func (r *orderRepo) Update(ctx context.Context, o *models.Order) error {
 	return r.db.WithContext(ctx).Save(o).Error
 }

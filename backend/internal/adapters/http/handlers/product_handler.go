@@ -58,6 +58,7 @@ type productBody struct {
 	Category           string            `json:"category"`
 	CategoryID         *string           `json:"category_id,omitempty"` // optional FK; product type = category (parent) + subcategory
 	UnitPrice          float64           `json:"unit_price" binding:"gte=0"`
+	DiscountPercent    float64           `json:"discount_percent" binding:"gte=0,lte=100"`
 	Currency           string            `json:"currency"`
 	StockQuantity      int               `json:"stock_quantity" binding:"gte=0"`
 	Unit               string            `json:"unit"`
@@ -84,6 +85,7 @@ func (b *productBody) toProduct(id uuid.UUID, pharmacyID uuid.UUID) models.Produ
 		SKU:               b.SKU,
 		Category:          b.Category,
 		UnitPrice:         b.UnitPrice,
+		DiscountPercent:   b.DiscountPercent,
 		Currency:          b.Currency,
 		StockQuantity:     b.StockQuantity,
 		Unit:              b.Unit,

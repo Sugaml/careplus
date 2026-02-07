@@ -22,15 +22,16 @@ func NewOrderHandler(orderService inbound.OrderService, logger *zap.Logger) *Ord
 }
 
 type createOrderRequest struct {
-	CustomerName   string                  `json:"customer_name"`
-	CustomerPhone  string                  `json:"customer_phone"`
-	CustomerEmail  string                  `json:"customer_email"`
-	Items          []inbound.OrderItemInput `json:"items" binding:"required"`
-	Notes          string                  `json:"notes"`
-	DiscountAmount *float64                `json:"discount_amount"`
-	PromoCode      *string                 `json:"promo_code"`
-	ReferralCode   *string                 `json:"referral_code"`
-	PointsToRedeem *int                    `json:"points_to_redeem"`
+	CustomerName      string                   `json:"customer_name"`
+	CustomerPhone     string                   `json:"customer_phone"`
+	CustomerEmail     string                   `json:"customer_email"`
+	Items             []inbound.OrderItemInput  `json:"items" binding:"required"`
+	Notes             string                   `json:"notes"`
+	DiscountAmount    *float64                 `json:"discount_amount"`
+	PromoCode         *string                  `json:"promo_code"`
+	ReferralCode      *string                  `json:"referral_code"`
+	PointsToRedeem    *int                     `json:"points_to_redeem"`
+	PaymentGatewayID  *string                  `json:"payment_gateway_id"` // optional; mock payment will be recorded
 }
 
 func (h *OrderHandler) Create(c *gin.Context) {
@@ -43,7 +44,13 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.BindValidationError(errors.ErrCodeValidation, "Invalid input", err))
 		return
 	}
-	o, err := h.orderService.Create(c.Request.Context(), pharmacyID, userID, req.CustomerName, req.CustomerPhone, req.CustomerEmail, req.Items, req.Notes, req.DiscountAmount, req.PromoCode, req.ReferralCode, req.PointsToRedeem)
+	var paymentGatewayID *uuid.UUID
+	if req.PaymentGatewayID != nil && *req.PaymentGatewayID != "" {
+		if parsed, err := uuid.Parse(*req.PaymentGatewayID); err == nil {
+			paymentGatewayID = &parsed
+		}
+	}
+	o, err := h.orderService.Create(c.Request.Context(), pharmacyID, userID, req.CustomerName, req.CustomerPhone, req.CustomerEmail, req.Items, req.Notes, req.DiscountAmount, req.PromoCode, req.ReferralCode, req.PointsToRedeem, paymentGatewayID)
 	if err != nil {
 		writeServiceError(c, err)
 		return
@@ -62,6 +69,18 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 		c.JSON(http.StatusNotFound, response.ErrorResponse{Code: errors.ErrCodeNotFound, Message: "order not found"})
 		return
 	}
+	// End users (role "staff") may only view their own orders.
+	if roleVal, ok := c.Get("role"); ok {
+		if roleStr, _ := roleVal.(string); roleStr == "staff" {
+			userIDStr, _ := c.Get("user_id")
+			if userIDStr != nil {
+				if userID, parseErr := uuid.Parse(userIDStr.(string)); parseErr == nil && o.CreatedBy != userID {
+					c.JSON(http.StatusForbidden, response.ErrorResponse{Code: errors.ErrCodeForbidden, Message: "you can only view your own orders"})
+					return
+				}
+			}
+		}
+	}
 	c.JSON(http.StatusOK, o)
 }
 
@@ -72,7 +91,18 @@ func (h *OrderHandler) List(c *gin.Context) {
 	if v := c.Query("status"); v != "" {
 		status = &v
 	}
-	list, err := h.orderService.List(c.Request.Context(), pharmacyID, status)
+	// End users (role "staff") see only their own orders; others see all pharmacy orders.
+	var createdBy *uuid.UUID
+	if roleVal, ok := c.Get("role"); ok {
+		if roleStr, _ := roleVal.(string); roleStr == "staff" {
+			if userIDStr, ok2 := c.Get("user_id"); ok2 {
+				if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
+					createdBy = &uid
+				}
+			}
+		}
+	}
+	list, err := h.orderService.List(c.Request.Context(), pharmacyID, createdBy, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: err.Error()})
 		return
@@ -81,6 +111,13 @@ func (h *OrderHandler) List(c *gin.Context) {
 }
 
 func (h *OrderHandler) Accept(c *gin.Context) {
+	// Only staff roles (admin/manager/pharmacist) may accept orders; end users (role "staff") may not.
+	if roleVal, ok := c.Get("role"); ok {
+		if roleStr, _ := roleVal.(string); roleStr == "staff" {
+			c.JSON(http.StatusForbidden, response.ErrorResponse{Code: errors.ErrCodeForbidden, Message: "end users cannot accept orders"})
+			return
+		}
+	}
 	id, err := uuid.Parse(c.Param("orderId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid id"})
@@ -95,6 +132,13 @@ func (h *OrderHandler) Accept(c *gin.Context) {
 }
 
 func (h *OrderHandler) UpdateStatus(c *gin.Context) {
+	// Only staff roles (admin/manager/pharmacist) may change order status; end users (role "staff") may not.
+	if roleVal, ok := c.Get("role"); ok {
+		if roleStr, _ := roleVal.(string); roleStr == "staff" {
+			c.JSON(http.StatusForbidden, response.ErrorResponse{Code: errors.ErrCodeForbidden, Message: "end users cannot update order status"})
+			return
+		}
+	}
 	id, err := uuid.Parse(c.Param("orderId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid id"})

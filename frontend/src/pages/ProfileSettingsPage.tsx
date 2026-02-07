@@ -1,11 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { authApi } from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { authApi, addressesApi, type UserAddress } from '@/lib/api';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { User, Save, Lock } from 'lucide-react';
+import {
+  User,
+  Save,
+  Lock,
+  MapPin,
+  Plus,
+  Pencil,
+  Trash2,
+  Star,
+  ChevronRight,
+  Mail,
+  Shield,
+} from 'lucide-react';
+
+type ProfileSection = 'account' | 'security' | 'addresses';
+
+const SECTION_ICONS: Record<ProfileSection, React.ComponentType<{ className?: string }>> = {
+  account: User,
+  security: Lock,
+  addresses: MapPin,
+};
 
 export default function ProfileSettingsPage() {
   const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
+  const [activeSection, setActiveSection] = useState<ProfileSection>('account');
+
   const [name, setName] = useState(user?.name ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -19,6 +43,161 @@ export default function ProfileSettingsPage() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordConfirmOpen, setPasswordConfirmOpen] = useState(false);
+
+  const [addresses, setAddresses] = useState<UserAddress[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(true);
+  const [addressError, setAddressError] = useState('');
+  const [addressSuccess, setAddressSuccess] = useState('');
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
+  const [addressForm, setAddressForm] = useState({
+    label: '',
+    line1: '',
+    line2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: '',
+    phone: '',
+    set_as_default: false,
+  });
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [deleteAddressId, setDeleteAddressId] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const loadAddresses = async () => {
+    try {
+      const list = await addressesApi.list();
+      setAddresses(list);
+    } catch {
+      setAddresses([]);
+    } finally {
+      setAddressesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) loadAddresses();
+  }, [user]);
+
+  const resetAddressForm = () => {
+    setAddressForm({
+      label: '',
+      line1: '',
+      line2: '',
+      city: '',
+      state: '',
+      postal_code: '',
+      country: '',
+      phone: '',
+      set_as_default: false,
+    });
+    setEditingAddress(null);
+    setShowAddressForm(false);
+  };
+
+  const handleAddAddress = () => {
+    resetAddressForm();
+    setShowAddressForm(true);
+  };
+
+  const handleEditAddress = (addr: UserAddress) => {
+    setEditingAddress(addr);
+    setAddressForm({
+      label: addr.label || '',
+      line1: addr.line1,
+      line2: addr.line2 || '',
+      city: addr.city,
+      state: addr.state || '',
+      postal_code: addr.postal_code || '',
+      country: addr.country,
+      phone: addr.phone || '',
+      set_as_default: addr.is_default,
+    });
+    setShowAddressForm(true);
+  };
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddressError('');
+    setAddressSuccess('');
+    setAddressSaving(true);
+    try {
+      if (editingAddress) {
+        await addressesApi.update(editingAddress.id, {
+          label: addressForm.label || undefined,
+          line1: addressForm.line1,
+          line2: addressForm.line2 || undefined,
+          city: addressForm.city,
+          state: addressForm.state || undefined,
+          postal_code: addressForm.postal_code || undefined,
+          country: addressForm.country,
+          phone: addressForm.phone || undefined,
+          set_as_default: addressForm.set_as_default,
+        });
+        setAddressSuccess('Address updated.');
+      } else {
+        await addressesApi.create({
+          label: addressForm.label || undefined,
+          line1: addressForm.line1,
+          line2: addressForm.line2 || undefined,
+          city: addressForm.city,
+          state: addressForm.state || undefined,
+          postal_code: addressForm.postal_code || undefined,
+          country: addressForm.country,
+          phone: addressForm.phone || undefined,
+          set_as_default: addressForm.set_as_default,
+        });
+        setAddressSuccess('Address added.');
+      }
+      resetAddressForm();
+      await loadAddresses();
+    } catch (e) {
+      setAddressError(e instanceof Error ? e.message : 'Failed to save address');
+    } finally {
+      setAddressSaving(false);
+    }
+  };
+
+  const handleSetDefaultAddress = async (id: string) => {
+    setAddressError('');
+    setAddressSuccess('');
+    try {
+      await addressesApi.setDefault(id);
+      setAddressSuccess('Default address updated.');
+      await loadAddresses();
+    } catch (e) {
+      setAddressError(e instanceof Error ? e.message : 'Failed to set default address');
+    }
+  };
+
+  const handleDeleteAddressClick = (id: string) => {
+    setDeleteAddressId(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteAddressConfirm = async () => {
+    if (!deleteAddressId) return;
+    setAddressError('');
+    setAddressSuccess('');
+    try {
+      await addressesApi.delete(deleteAddressId);
+      setAddressSuccess('Address removed.');
+      setDeleteAddressId(null);
+      setDeleteConfirmOpen(false);
+      await loadAddresses();
+    } catch (e) {
+      setAddressError(e instanceof Error ? e.message : 'Failed to delete address');
+    } finally {
+      setDeleteAddressId(null);
+      setDeleteConfirmOpen(false);
+    }
+  };
+
+  const formatAddress = (a: UserAddress) => {
+    const parts = [a.line1, a.line2, a.city, a.state, a.postal_code, a.country].filter(Boolean);
+    return parts.join(', ');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,127 +257,474 @@ export default function ProfileSettingsPage() {
 
   if (!user) return null;
 
+  const inputClass =
+    'w-full px-4 py-2.5 rounded-xl bg-theme-input-bg border border-theme-input-border text-theme-text placeholder:text-theme-muted focus:ring-2 focus:ring-careplus-primary focus:border-transparent transition-shadow';
+
+  const sections: { id: ProfileSection; labelKey: string }[] = [
+    { id: 'account', labelKey: 'profile_menu_account' },
+    { id: 'security', labelKey: 'profile_menu_security' },
+    { id: 'addresses', labelKey: 'profile_menu_addresses' },
+  ];
+
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-6">
-        <User className="w-7 h-7 text-careplus-primary" />
-        <h1 className="text-2xl font-bold text-gray-800">Profile settings</h1>
-      </div>
-      <p className="text-gray-600 mb-6">
-        Update your display name, password, and view your account details.
-      </p>
-
-      <form onSubmit={handleSubmit} className="max-w-xl space-y-6">
-        {error && (
-          <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
-        )}
-        {success && (
-          <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">
-            Profile saved successfully.
-          </div>
-        )}
-
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
-          <h2 className="font-semibold text-gray-800 border-b pb-2">Account info</h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <p className="text-gray-900">{user.email}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Email cannot be changed here.</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <p className="text-gray-900 capitalize">{user.role}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Display name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
-              placeholder="Your name"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-careplus-primary text-white hover:bg-careplus-primary/90 disabled:opacity-60"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save changes'}
-          </button>
+    <div className="max-w-5xl mx-auto">
+      {/* Page header */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-11 h-11 rounded-xl bg-careplus-primary/15 flex items-center justify-center shrink-0">
+          <User className="w-6 h-6 text-careplus-primary" />
         </div>
-      </form>
+        <div>
+          <h1 className="text-2xl font-bold text-theme-text">{t('profile_title')}</h1>
+          <p className="text-theme-muted text-sm mt-0.5">{t('profile_subtitle')}</p>
+        </div>
+      </div>
 
-      <form onSubmit={handleChangePassword} className="max-w-xl mt-8 space-y-6">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
-          <h2 className="font-semibold text-gray-800 border-b pb-2 flex items-center gap-2">
-            <Lock className="w-5 h-5 text-careplus-primary" />
-            Change password
-          </h2>
-          {passwordError && (
-            <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{passwordError}</div>
+      <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+        {/* Sub-menu: sidebar on md+, tabs on small */}
+        <nav
+          className="md:w-56 shrink-0 flex flex-row md:flex-col gap-1 p-1 md:py-0 rounded-xl md:rounded-none bg-theme-surface md:bg-transparent border border-theme-border md:border-0 md:border-r md:border-theme-border md:pr-6"
+          aria-label={t('profile_subtitle')}
+        >
+          {sections.map(({ id, labelKey }) => {
+            const Icon = SECTION_ICONS[id];
+            const isActive = activeSection === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveSection(id)}
+                className={`
+                  w-full flex items-center justify-between md:justify-start gap-3 px-4 py-3 rounded-lg text-left font-medium transition-colors
+                  ${isActive
+                    ? 'bg-careplus-primary/15 text-careplus-primary border border-careplus-primary/30'
+                    : 'text-theme-text hover:bg-theme-surface-hover border border-transparent'}
+                `}
+              >
+                <span className="flex items-center gap-3">
+                  <Icon className="w-5 h-5 shrink-0 opacity-80" />
+                  {t(labelKey)}
+                </span>
+                <ChevronRight
+                  className={`w-4 h-4 shrink-0 md:hidden ${isActive ? 'text-careplus-primary' : 'text-theme-muted'}`}
+                />
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Content area */}
+        <main className="flex-1 min-w-0">
+          {/* Account */}
+          {activeSection === 'account' && (
+            <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in">
+              {error && (
+                <div
+                  className="p-3 rounded-xl bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-400 text-sm"
+                  role="alert"
+                >
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div
+                  className="p-3 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm"
+                  role="status"
+                >
+                  {t('profile_saved')}
+                </div>
+              )}
+
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-theme-border bg-theme-bg/50">
+                  <h2 className="font-semibold text-theme-text flex items-center gap-2">
+                    <User className="w-5 h-5 text-careplus-primary shrink-0" />
+                    {t('profile_account_info')}
+                  </h2>
+                </div>
+                <div className="p-6 space-y-5">
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-theme-text mb-1">
+                      <Mail className="w-4 h-4 text-theme-muted" />
+                      {t('auth_email')}
+                    </label>
+                    <p className="text-theme-text pl-6">{user.email}</p>
+                    <p className="text-xs text-theme-muted mt-1 pl-6">{t('profile_email_readonly')}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text mb-1.5">{t('auth_role')}</label>
+                    <p className="text-theme-text capitalize pl-6">{user.role}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text mb-1.5">{t('profile_display_name')}</label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={inputClass}
+                      placeholder={user.name || user.email}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-careplus-primary text-theme-text-inverse font-medium hover:bg-careplus-secondary disabled:opacity-60 transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? t('profile_saving') : t('profile_save')}
+                  </button>
+                </div>
+              </div>
+            </form>
           )}
-          {passwordSuccess && (
-            <div className="p-3 rounded-lg bg-green-50 text-green-700 text-sm">
-              Password changed successfully.
+
+          {/* Security (password) */}
+          {activeSection === 'security' && (
+            <form onSubmit={handleChangePassword} className="space-y-6 animate-fade-in">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-theme-border bg-theme-bg/50">
+                  <h2 className="font-semibold text-theme-text flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-careplus-primary shrink-0" />
+                    {t('profile_change_password')}
+                  </h2>
+                </div>
+                <div className="p-6 space-y-5">
+                  {passwordError && (
+                    <div
+                      className="p-3 rounded-xl bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-400 text-sm"
+                      role="alert"
+                    >
+                      {passwordError}
+                    </div>
+                  )}
+                  {passwordSuccess && (
+                    <div
+                      className="p-3 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm"
+                      role="status"
+                    >
+                      {t('profile_password_changed')}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text mb-1.5">
+                      {t('profile_current_password')}
+                    </label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className={inputClass}
+                      placeholder="••••••••"
+                      required
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text mb-1.5">
+                      {t('profile_new_password')}
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className={inputClass}
+                      placeholder="••••••••"
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme-text mb-1.5">
+                      {t('profile_confirm_password')}
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={inputClass}
+                      placeholder="••••••••"
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={passwordSaving}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-careplus-primary text-theme-text-inverse font-medium hover:bg-careplus-secondary disabled:opacity-60 transition-colors"
+                  >
+                    <Lock className="w-4 h-4" />
+                    {passwordSaving ? t('profile_saving') : t('profile_change_password')}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* Addresses */}
+          {activeSection === 'addresses' && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-theme-border bg-theme-bg/50">
+                  <h2 className="font-semibold text-theme-text flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-careplus-primary shrink-0" />
+                    {t('profile_addresses')}
+                  </h2>
+                  <p className="text-sm text-theme-muted mt-1">{t('profile_addresses_hint')}</p>
+                </div>
+                <div className="p-6 space-y-5">
+                  {addressError && (
+                    <div
+                      className="p-3 rounded-xl bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-400 text-sm"
+                      role="alert"
+                    >
+                      {addressError}
+                    </div>
+                  )}
+                  {addressSuccess && (
+                    <div
+                      className="p-3 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm"
+                      role="status"
+                    >
+                      {addressSuccess}
+                    </div>
+                  )}
+
+                  {addressesLoading ? (
+                    <p className="text-theme-muted text-sm py-4">{t('profile_loading_addresses')}</p>
+                  ) : (
+                    <>
+                      <ul className="space-y-4">
+                        {addresses.map((addr) => (
+                          <li
+                            key={addr.id}
+                            className="group flex items-start justify-between gap-4 p-5 rounded-xl border border-theme-border bg-theme-bg hover:border-careplus-primary/30 transition-colors"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                {addr.label && (
+                                  <span className="font-semibold text-theme-text">{addr.label}</span>
+                                )}
+                                {addr.is_default && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-careplus-primary/15 text-careplus-primary">
+                                    <Star className="w-3.5 h-3.5 fill-current" />
+                                    {t('profile_default')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-theme-muted leading-relaxed">{formatAddress(addr)}</p>
+                              {addr.phone && (
+                                <p className="text-xs text-theme-muted mt-2 flex items-center gap-1">
+                                  <span className="opacity-75">Phone:</span> {addr.phone}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity md:opacity-100">
+                              {!addr.is_default && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetDefaultAddress(addr.id)}
+                                  className="p-2.5 rounded-lg text-theme-muted hover:bg-theme-surface-hover hover:text-careplus-primary transition-colors"
+                                  title={t('profile_set_default')}
+                                >
+                                  <Star className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleEditAddress(addr)}
+                                className="p-2.5 rounded-lg text-theme-muted hover:bg-theme-surface-hover hover:text-careplus-primary transition-colors"
+                                title={t('profile_edit')}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAddressClick(addr.id)}
+                                className="p-2.5 rounded-lg text-theme-muted hover:bg-theme-surface-hover hover:text-red-600 transition-colors"
+                                title={t('profile_delete')}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+
+                      {addresses.length === 0 && !showAddressForm && (
+                        <div className="text-center py-8 px-4 rounded-xl border border-dashed border-theme-border bg-theme-bg/50">
+                          <MapPin className="w-10 h-10 text-theme-muted mx-auto mb-3 opacity-60" />
+                          <p className="text-theme-muted text-sm">{t('profile_no_addresses')}</p>
+                        </div>
+                      )}
+
+                      {showAddressForm ? (
+                        <form
+                          onSubmit={handleSaveAddress}
+                          className="space-y-4 pt-6 border-t border-theme-border"
+                        >
+                          <h3 className="font-medium text-theme-text">
+                            {editingAddress ? t('profile_edit_address') : t('profile_add_address')}
+                          </h3>
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text mb-1.5">
+                              Label (optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.label}
+                              onChange={(e) => setAddressForm((f) => ({ ...f, label: e.target.value }))}
+                              className={inputClass}
+                              placeholder="e.g. Home, Office"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text mb-1.5">
+                              Address line 1 *
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.line1}
+                              onChange={(e) => setAddressForm((f) => ({ ...f, line1: e.target.value }))}
+                              className={inputClass}
+                              placeholder="Street address"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text mb-1.5">
+                              Address line 2 (optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.line2}
+                              onChange={(e) => setAddressForm((f) => ({ ...f, line2: e.target.value }))}
+                              className={inputClass}
+                              placeholder="Apartment, suite, etc."
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text mb-1.5">City *</label>
+                              <input
+                                type="text"
+                                value={addressForm.city}
+                                onChange={(e) => setAddressForm((f) => ({ ...f, city: e.target.value }))}
+                                className={inputClass}
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text mb-1.5">
+                                State / Province
+                              </label>
+                              <input
+                                type="text"
+                                value={addressForm.state}
+                                onChange={(e) => setAddressForm((f) => ({ ...f, state: e.target.value }))}
+                                className={inputClass}
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text mb-1.5">
+                                Postal code
+                              </label>
+                              <input
+                                type="text"
+                                value={addressForm.postal_code}
+                                onChange={(e) =>
+                                  setAddressForm((f) => ({ ...f, postal_code: e.target.value }))
+                                }
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-theme-text mb-1.5">
+                                Country *
+                              </label>
+                              <input
+                                type="text"
+                                value={addressForm.country}
+                                onChange={(e) => setAddressForm((f) => ({ ...f, country: e.target.value }))}
+                                className={inputClass}
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-theme-text mb-1.5">
+                              Phone (optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.phone}
+                              onChange={(e) => setAddressForm((f) => ({ ...f, phone: e.target.value }))}
+                              className={inputClass}
+                              placeholder="Contact number"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="set_as_default"
+                              checked={addressForm.set_as_default}
+                              onChange={(e) =>
+                                setAddressForm((f) => ({ ...f, set_as_default: e.target.checked }))
+                              }
+                              className="rounded border-theme-input-border text-careplus-primary focus:ring-careplus-primary"
+                            />
+                            <label htmlFor="set_as_default" className="text-sm text-theme-text">
+                              {t('profile_set_default')} address
+                            </label>
+                          </div>
+                          <div className="flex gap-3 pt-2">
+                            <button
+                              type="submit"
+                              disabled={addressSaving}
+                              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-careplus-primary text-theme-text-inverse font-medium hover:bg-careplus-secondary disabled:opacity-60 transition-colors"
+                            >
+                              {addressSaving
+                                ? t('profile_saving')
+                                : editingAddress
+                                  ? t('profile_update_address')
+                                  : t('profile_add_address')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={resetAddressForm}
+                              className="px-5 py-2.5 rounded-xl border border-theme-border text-theme-text hover:bg-theme-surface-hover transition-colors"
+                            >
+                              {t('profile_cancel')}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleAddAddress}
+                          className="flex items-center justify-center gap-2 w-full py-4 rounded-xl border-2 border-dashed border-careplus-primary/50 text-careplus-primary font-medium hover:bg-careplus-primary/10 hover:border-careplus-primary transition-colors"
+                        >
+                          <Plus className="w-5 h-5" />
+                          {t('profile_add_address')}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current password</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
-              placeholder="Enter current password"
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
-              placeholder="At least 6 characters"
-              required
-              minLength={6}
-              autoComplete="new-password"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm new password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
-              placeholder="Confirm new password"
-              required
-              minLength={6}
-              autoComplete="new-password"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={passwordSaving}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-careplus-primary text-white hover:bg-careplus-primary/90 disabled:opacity-60"
-          >
-            <Lock className="w-4 h-4" />
-            {passwordSaving ? 'Changing...' : 'Change password'}
-          </button>
-        </div>
-      </form>
+        </main>
+      </div>
 
       <ConfirmDialog
         open={profileConfirmOpen}
-        title="Update profile"
-        message="Save changes to your display name?"
-        confirmLabel="Save"
-        cancelLabel="Cancel"
+        title={t('profile_update_profile')}
+        message={t('profile_update_confirm')}
+        confirmLabel={t('save')}
+        cancelLabel={t('cancel')}
         variant="default"
         loading={saving}
         onConfirm={handleProfileConfirm}
@@ -207,14 +733,28 @@ export default function ProfileSettingsPage() {
 
       <ConfirmDialog
         open={passwordConfirmOpen}
-        title="Change password"
-        message="Are you sure you want to change your password? You will need to sign in again with the new password."
-        confirmLabel="Change password"
-        cancelLabel="Cancel"
+        title={t('profile_change_password')}
+        message={t('profile_change_password_confirm')}
+        confirmLabel={t('profile_change_password')}
+        cancelLabel={t('cancel')}
         variant="default"
         loading={passwordSaving}
         onConfirm={handlePasswordConfirm}
         onCancel={() => setPasswordConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title={t('profile_delete_address')}
+        message={t('profile_delete_address_confirm')}
+        confirmLabel={t('profile_delete')}
+        cancelLabel={t('cancel')}
+        variant="danger"
+        onConfirm={handleDeleteAddressConfirm}
+        onCancel={() => {
+          setDeleteConfirmOpen(false);
+          setDeleteAddressId(null);
+        }}
       />
     </div>
   );

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { configApi, referralApi, type PharmacyConfig, type ReferralPointsConfig } from '@/lib/api';
+import { configApi, referralApi, paymentGatewaysApi, type PharmacyConfig, type ReferralPointsConfig, type PaymentGateway } from '@/lib/api';
 import { useBrand } from '@/contexts/BrandContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Loader from '@/components/Loader';
-import { Settings, Save, RefreshCw, Gift } from 'lucide-react';
+import { Settings, Save, RefreshCw, Gift, CreditCard, Plus, Pencil, Trash2 } from 'lucide-react';
 
 export default function ConfigPage() {
   const { refreshBrand } = useBrand();
@@ -18,6 +18,12 @@ export default function ConfigPage() {
   const [referralLoading, setReferralLoading] = useState(true);
   const [referralSaving, setReferralSaving] = useState(false);
   const [referralSaveConfirmOpen, setReferralSaveConfirmOpen] = useState(false);
+  const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([]);
+  const [paymentGatewaysLoading, setPaymentGatewaysLoading] = useState(true);
+  const [paymentGatewayForm, setPaymentGatewayForm] = useState<{ code: string; name: string; is_active: boolean; sort_order: number } | null>(null);
+  const [editingGatewayId, setEditingGatewayId] = useState<string | null>(null);
+  const [gatewaySaving, setGatewaySaving] = useState(false);
+  const [gatewayError, setGatewayError] = useState('');
 
   const loadConfig = useCallback(() => {
     setLoading(true);
@@ -58,6 +64,19 @@ export default function ConfigPage() {
       .finally(() => setReferralLoading(false));
   }, []);
 
+  const loadPaymentGateways = useCallback(() => {
+    setPaymentGatewaysLoading(true);
+    paymentGatewaysApi
+      .list()
+      .then(setPaymentGateways)
+      .catch(() => setPaymentGateways([]))
+      .finally(() => setPaymentGatewaysLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadPaymentGateways();
+  }, [loadPaymentGateways]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!config) return;
@@ -83,6 +102,8 @@ export default function ConfigPage() {
         license_no: config.license_no,
         verified_at: config.verified_at,
         established_year: config.established_year,
+        return_refund_policy: config.return_refund_policy ?? undefined,
+        chat_edit_window_minutes: config.chat_edit_window_minutes ?? 10,
       });
       setConfig(updated);
       setSuccess(true);
@@ -234,6 +255,41 @@ export default function ConfigPage() {
               onChange={(e) => setConfig((prev) => prev ? { ...prev, contact_email: e.target.value } : null)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
               placeholder="contact@pharmacy.com"
+            />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <h2 className="font-semibold text-gray-800 border-b pb-2">Return & Refund Policy</h2>
+          <p className="text-sm text-gray-500">
+            Optional custom policy text shown on the public Return & Refund page. Leave blank to show the default compliant policy. Plain text or simple HTML.
+          </p>
+          <textarea
+            value={c.return_refund_policy ?? ''}
+            onChange={(e) => setConfig((prev) => prev ? { ...prev, return_refund_policy: e.target.value || undefined } : null)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent font-mono text-sm"
+            rows={8}
+            placeholder="e.g. We accept returns within 7 days for unopened items..."
+          />
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <h2 className="font-semibold text-gray-800 border-b pb-2">Chat</h2>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Chat message edit window (minutes)</label>
+            <p className="text-xs text-gray-500 mb-1">Users and customers can edit their own messages only within this many minutes after sending. Set to 0 to disable editing.</p>
+            <input
+              type="number"
+              min={0}
+              max={1440}
+              value={c.chat_edit_window_minutes ?? 10}
+              onChange={(e) =>
+                setConfig((prev) =>
+                  prev ? { ...prev, chat_edit_window_minutes: Math.max(0, parseInt(e.target.value, 10) || 0) } : null
+                )
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-careplus-primary focus:border-transparent"
+              placeholder="10"
             />
           </div>
         </div>
@@ -400,6 +456,207 @@ export default function ConfigPage() {
               </button>
             </>
           ) : null}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <h2 className="font-semibold text-gray-800 border-b pb-2 flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-careplus-primary" />
+            Payment gateways
+          </h2>
+          <p className="text-sm text-gray-500">
+            Payment methods shown at checkout (e.g. eSewa, Khalti, QR, Cash on Delivery, Fonepay). Only active gateways appear in the store. Mock payment is used for now.
+          </p>
+          {paymentGatewaysLoading ? (
+            <p className="text-sm text-gray-500">Loading…</p>
+          ) : (
+            <>
+              <ul className="space-y-2">
+                {paymentGateways.map((gw) => (
+                  <li
+                    key={gw.id}
+                    className="flex items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0"
+                  >
+                    <div>
+                      <span className="font-medium text-gray-800">{gw.name}</span>
+                      <span className="text-gray-500 text-sm ml-2">({gw.code})</span>
+                      {!gw.is_active && <span className="ml-2 text-amber-600 text-sm">Inactive</span>}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingGatewayId(gw.id);
+                          setPaymentGatewayForm({
+                            code: gw.code,
+                            name: gw.name,
+                            is_active: gw.is_active,
+                            sort_order: gw.sort_order,
+                          });
+                        }}
+                        className="p-1.5 rounded text-gray-500 hover:bg-gray-100 hover:text-careplus-primary"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!confirm('Remove this payment gateway?')) return;
+                          setGatewayError('');
+                          try {
+                            await paymentGatewaysApi.delete(gw.id);
+                            loadPaymentGateways();
+                          } catch (e) {
+                            setGatewayError(e instanceof Error ? e.message : 'Failed to delete');
+                          }
+                        }}
+                        className="p-1.5 rounded text-gray-500 hover:bg-red-50 hover:text-red-600"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {gatewayError && <p className="text-sm text-red-600">{gatewayError}</p>}
+              {editingGatewayId ? (
+                <div className="pt-2 border-t border-gray-200 space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Edit gateway</p>
+                  {paymentGatewayForm && (
+                    <>
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        value={paymentGatewayForm.name}
+                        onChange={(e) => setPaymentGatewayForm((p) => (p ? { ...p, name: e.target.value } : null))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={paymentGatewayForm.is_active}
+                          onChange={(e) =>
+                            setPaymentGatewayForm((p) => (p ? { ...p, is_active: e.target.checked } : null))
+                          }
+                          className="rounded border-gray-300 text-careplus-primary"
+                        />
+                        <span className="text-sm">Active (show at checkout)</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!paymentGatewayForm) return;
+                            setGatewayError('');
+                            setGatewaySaving(true);
+                            try {
+                              await paymentGatewaysApi.update(editingGatewayId, {
+                                name: paymentGatewayForm.name,
+                                is_active: paymentGatewayForm.is_active,
+                                sort_order: paymentGatewayForm.sort_order,
+                              });
+                              loadPaymentGateways();
+                              setEditingGatewayId(null);
+                              setPaymentGatewayForm(null);
+                            } catch (e) {
+                              setGatewayError(e instanceof Error ? e.message : 'Failed to update');
+                            } finally {
+                              setGatewaySaving(false);
+                            }
+                          }}
+                          disabled={gatewaySaving}
+                          className="px-3 py-1.5 bg-careplus-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingGatewayId(null);
+                            setPaymentGatewayForm(null);
+                            setGatewayError('');
+                          }}
+                          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-gray-200 space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Add gateway</p>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <select
+                      value={paymentGatewayForm?.code ?? ''}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        const optionText = e.target.selectedOptions[0]?.text ?? code;
+                        if (!code) {
+                          setPaymentGatewayForm(null);
+                          return;
+                        }
+                        setPaymentGatewayForm({
+                          code,
+                          name: code === 'other' ? '' : optionText,
+                          is_active: true,
+                          sort_order: paymentGatewayForm?.sort_order ?? paymentGateways.length,
+                        });
+                      }}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="">Select type…</option>
+                      <option value="esewa">eSewa</option>
+                      <option value="khalti">Khalti</option>
+                      <option value="qr">QR</option>
+                      <option value="cod">Cash on Delivery</option>
+                      <option value="fonepay">Fonepay</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Display name"
+                      value={paymentGatewayForm?.name ?? ''}
+                      onChange={(e) =>
+                        setPaymentGatewayForm((p) => (p ? { ...p, name: e.target.value } : null))
+                      }
+                      className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!paymentGatewayForm?.code || !paymentGatewayForm?.name.trim()) return;
+                        setGatewayError('');
+                        setGatewaySaving(true);
+                        try {
+                          await paymentGatewaysApi.create({
+                            code: paymentGatewayForm.code,
+                            name: paymentGatewayForm.name.trim(),
+                            is_active: paymentGatewayForm.is_active,
+                            sort_order: paymentGatewayForm.sort_order,
+                          });
+                          loadPaymentGateways();
+                          setPaymentGatewayForm(null);
+                        } catch (e) {
+                          setGatewayError(e instanceof Error ? e.message : 'Failed to add');
+                        } finally {
+                          setGatewaySaving(false);
+                        }
+                      }}
+                      disabled={gatewaySaving || !paymentGatewayForm?.code || !paymentGatewayForm?.name?.trim()}
+                      className="flex items-center gap-1 px-3 py-2 bg-careplus-primary text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add
+                    </button>
+                  </div>
+                  {gatewayError && <p className="text-sm text-red-600">{gatewayError}</p>}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <button

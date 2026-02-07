@@ -10,6 +10,7 @@ import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPolicyPage from '@/pages/PrivacyPolicyPage';
+import ReturnRefundPolicyPage from '@/pages/ReturnRefundPolicyPage';
 import ProductsExplorePage from '@/pages/ProductsExplorePage';
 import DashboardPage from '@/pages/DashboardPage';
 import ProductsPage from '@/pages/ProductsPage';
@@ -29,15 +30,17 @@ import ProductUnitsPage from '@/pages/ProductUnitsPage';
 import MembershipsPage from '@/pages/MembershipsPage';
 import ProductDetailPage from '@/pages/ProductDetailPage';
 import PromosPage from '@/pages/PromosPage';
+import AnnouncementsPage from '@/pages/AnnouncementsPage';
+import PromoCodesPage from '@/pages/PromoCodesPage';
 import CustomersPage from '@/pages/CustomersPage';
 import TeamPage from '@/pages/TeamPage';
 import TeamMemberViewPage from '@/pages/TeamMemberViewPage';
 import DutyRosterPage from '@/pages/DutyRosterPage';
 import DailyLogsPage from '@/pages/DailyLogsPage';
 import InventoryPage from '@/pages/InventoryPage';
-
-/** Roles that can access the dashboard layout (admin/manager/pharmacist). Everyone else is treated as buyer/end user and sent to /products. */
-const STAFF_DASHBOARD_ROLES = ['admin', 'manager', 'pharmacist'];
+import ChatPage from '@/pages/ChatPage';
+import CustomerChatEntryPage from '@/pages/CustomerChatEntryPage';
+import { STAFF_DASHBOARD_ROLES } from '@/lib/roles';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -47,18 +50,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Loader variant="fullPage" message={t('checking_auth')} />;
   }
   if (!user) {
-    // Buyers see the products page without login when visiting root
     if (location.pathname === '/') {
       return <Navigate to="/products" replace />;
     }
     const returnTo = encodeURIComponent(location.pathname || '/products');
     return <Navigate to={`/login?returnTo=${returnTo}`} replace />;
   }
-  // Buyers/end users (e.g. staff role) always go to /products; only staff dashboard roles see the sidebar/dashboard
-  const canAccessDashboard = STAFF_DASHBOARD_ROLES.includes(user.role);
-  if (!canAccessDashboard) {
-    return <Navigate to="/products" replace />;
-  }
+  // All logged-in users (including buyers/staff) get the Layout with a role-appropriate sidebar
   return <>{children}</>;
 }
 
@@ -69,6 +67,7 @@ function AppRoutes() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/return-refund" element={<ReturnRefundPolicyPage />} />
       <Route path="/products" element={<ProductsExplorePage />} />
       <Route path="/products/:id" element={<ProductDetailPage />} />
       <Route
@@ -79,8 +78,9 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/products" replace />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="catalog" element={<ProductsExplorePage embedded />} />
         <Route path="manage/products" element={<ProductsPage />} />
         <Route path="manage/categories" element={<CategoriesPage />} />
         <Route path="manage/units" element={<ProductUnitsPage />} />
@@ -91,13 +91,16 @@ function AppRoutes() {
         <Route path="manage/roster" element={<DutyRosterPage />} />
         <Route path="manage/dailies" element={<DailyLogsPage />} />
         <Route path="inventory" element={<InventoryPage />} />
+        <Route path="chat" element={<ChatPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="billing" element={<BillingPage />} />
+        <Route path="promo-codes" element={<PromoCodesPage />} />
         <Route path="invoices" element={<InvoicesPage />} />
         <Route path="invoices/:id" element={<InvoiceDetailPage />} />
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="statements" element={<StatementsPage />} />
         <Route path="promos" element={<PromosPage />} />
+        <Route path="announcements" element={<AnnouncementsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="pharmacy" element={<PharmacyPage />} />
@@ -105,6 +108,7 @@ function AppRoutes() {
         <Route path="profile" element={<ProfileSettingsPage />} />
       </Route>
       <Route path="/store" element={<Navigate to="/products" replace />} />
+      <Route path="/customer-chat" element={<CustomerChatEntryPage />} />
       <Route path="*" element={<Navigate to="/products" replace />} />
     </Routes>
   );

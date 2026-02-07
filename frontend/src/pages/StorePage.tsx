@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { publicStoreApi, orderApi, promoCodeApi, resolveImageUrl } from '@/lib/api';
-import type { Product, Pharmacy } from '@/lib/api';
+import type { Product, Pharmacy, PaymentGateway } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import Loader from '@/components/Loader';
@@ -27,6 +27,8 @@ export default function StorePage() {
   const [referralCodeInput, setReferralCodeInput] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [pointsToRedeem, setPointsToRedeem] = useState<number | undefined>(undefined);
+  const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([]);
+  const [selectedPaymentGatewayId, setSelectedPaymentGatewayId] = useState<string | null>(null);
   const { user } = useAuth();
   const { items, addItem, removeItem, updateQuantity, clearCart, totalCount, totalAmount } = useCart();
   const navigate = useNavigate();
@@ -57,6 +59,14 @@ export default function StorePage() {
       .then(setProducts)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load products'))
       .finally(() => setLoading(false));
+  }, [selectedPharmacyId]);
+
+  useEffect(() => {
+    if (!selectedPharmacyId) return;
+    publicStoreApi
+      .listPaymentGateways(selectedPharmacyId)
+      .then(setPaymentGateways)
+      .catch(() => setPaymentGateways([]));
   }, [selectedPharmacyId]);
 
   // When user logs in, switch to their pharmacy so place-order works
@@ -123,9 +133,11 @@ export default function StorePage() {
           ...(appliedPromo ? { promo_code: appliedPromo.code } : {}),
           ...(referralCodeInput.trim() ? { referral_code: referralCodeInput.trim() } : {}),
           ...(pointsToRedeem != null && pointsToRedeem > 0 ? { points_to_redeem: pointsToRedeem } : {}),
+          ...(selectedPaymentGatewayId ? { payment_gateway_id: selectedPaymentGatewayId } : {}),
         });
         clearCart();
         clearPromo();
+        setSelectedPaymentGatewayId(null);
         setCartOpen(false);
         navigate('/orders');
       } catch (e) {
@@ -373,6 +385,33 @@ export default function StorePage() {
                   {pointsToRedeem != null && pointsToRedeem > 0 && (
                     <p className="text-sm text-gray-600">Using {pointsToRedeem} points</p>
                   )}
+                </div>
+              )}
+              {items.length > 0 && paymentGateways.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Payment method</p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {paymentGateways.map((gw) => (
+                      <label
+                        key={gw.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedPaymentGatewayId === gw.id
+                            ? 'border-careplus-primary bg-careplus-primary/10'
+                            : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="payment-gateway"
+                          value={gw.id}
+                          checked={selectedPaymentGatewayId === gw.id}
+                          onChange={() => setSelectedPaymentGatewayId(gw.id)}
+                          className="rounded-full border-gray-300 text-careplus-primary focus:ring-careplus-primary"
+                        />
+                        <span className="text-sm font-medium text-gray-800">{gw.name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
               <p className="font-semibold text-gray-800 mb-2">

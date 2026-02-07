@@ -73,6 +73,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if req.Role == "" {
 		req.Role = "staff"
 	}
+	// Public registration may only create end-user (staff) accounts
+	if req.Role != "staff" {
+		c.JSON(http.StatusForbidden, response.ErrorResponse{Code: errors.ErrCodeForbidden, Message: "Registration is only allowed with role 'staff'"})
+		return
+	}
 	user, err := h.authService.Register(c.Request.Context(), req.PharmacyID, req.Email, req.Password, req.Name, req.Role)
 	if err != nil {
 		if errors.IsAppError(err) {

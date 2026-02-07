@@ -89,6 +89,8 @@ type OrderRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Order, error)
 	GetByOrderNumber(ctx context.Context, pharmacyID uuid.UUID, orderNumber string) (*models.Order, error)
 	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, status *string) ([]*models.Order, error)
+	// ListByPharmacyAndCreatedBy returns orders for the pharmacy placed by the given user (for end-user "my orders").
+	ListByPharmacyAndCreatedBy(ctx context.Context, pharmacyID uuid.UUID, createdBy uuid.UUID, status *string) ([]*models.Order, error)
 	Update(ctx context.Context, o *models.Order) error
 	GetItemsByOrderID(ctx context.Context, orderID uuid.UUID) ([]*models.OrderItem, error)
 	CountByCustomerIDAndStatus(ctx context.Context, customerID uuid.UUID, status string) (int64, error)
@@ -102,6 +104,14 @@ type PaymentRepository interface {
 	ListByOrderID(ctx context.Context, orderID uuid.UUID) ([]*models.Payment, error)
 	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID) ([]*models.Payment, error)
 	Update(ctx context.Context, p *models.Payment) error
+}
+
+type PaymentGatewayRepository interface {
+	Create(ctx context.Context, pg *models.PaymentGateway) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.PaymentGateway, error)
+	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, activeOnly bool) ([]*models.PaymentGateway, error)
+	Update(ctx context.Context, pg *models.PaymentGateway) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type PharmacyConfigRepository interface {
@@ -242,4 +252,46 @@ type ReferralPointsConfigRepository interface {
 	Create(ctx context.Context, c *models.ReferralPointsConfig) error
 	GetByPharmacyID(ctx context.Context, pharmacyID uuid.UUID) (*models.ReferralPointsConfig, error)
 	Update(ctx context.Context, c *models.ReferralPointsConfig) error
+}
+
+type ConversationRepository interface {
+	Create(ctx context.Context, c *models.Conversation) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Conversation, error)
+	GetByPharmacyAndCustomer(ctx context.Context, pharmacyID, customerID uuid.UUID) (*models.Conversation, error)
+	GetByPharmacyAndUser(ctx context.Context, pharmacyID, userID uuid.UUID) (*models.Conversation, error)
+	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, userID *uuid.UUID, limit, offset int) ([]*models.Conversation, int64, error)
+	Update(ctx context.Context, c *models.Conversation) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+type ChatMessageRepository interface {
+	Create(ctx context.Context, m *models.ChatMessage) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.ChatMessage, error)
+	ListByConversationID(ctx context.Context, conversationID uuid.UUID, limit, offset int) ([]*models.ChatMessage, int64, error)
+	Update(ctx context.Context, m *models.ChatMessage) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	DeleteByConversationID(ctx context.Context, conversationID uuid.UUID) error
+}
+
+type UserAddressRepository interface {
+	Create(ctx context.Context, a *models.UserAddress) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.UserAddress, error)
+	ListByUserID(ctx context.Context, userID uuid.UUID) ([]*models.UserAddress, error)
+	Update(ctx context.Context, a *models.UserAddress) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	ClearDefaultByUserID(ctx context.Context, userID uuid.UUID) error
+}
+
+type AnnouncementRepository interface {
+	Create(ctx context.Context, a *models.Announcement) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Announcement, error)
+	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, activeOnly bool) ([]*models.Announcement, error)
+	Update(ctx context.Context, a *models.Announcement) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+type AnnouncementAckRepository interface {
+	Create(ctx context.Context, a *models.AnnouncementAck) error
+	HasAcked(ctx context.Context, userID, announcementID uuid.UUID) (bool, error)
+	HasSkippedAllSince(ctx context.Context, userID uuid.UUID, since time.Time) (bool, error)
 }

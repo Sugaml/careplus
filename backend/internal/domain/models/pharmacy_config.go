@@ -20,11 +20,13 @@ type PharmacyConfig struct {
 	ContactPhone    string         `gorm:"size:50" json:"contact_phone"`
 	ContactEmail    string         `gorm:"size:255" json:"contact_email"`
 	PrimaryColor    string         `gorm:"size:20" json:"primary_color"`   // e.g. #0066cc for theme
-	LicenseNo       string         `gorm:"size:100" json:"license_no"`      // Pharmacy license number (for trust badge)
-	VerifiedAt      *time.Time     `gorm:"index" json:"verified_at,omitempty"` // When pharmacy was verified (shows Verified badge)
-	EstablishedYear int            `gorm:"default:0" json:"established_year"` // Year established (e.g. 2010)
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
+	LicenseNo          string         `gorm:"size:100" json:"license_no"`      // Pharmacy license number (for trust badge)
+	VerifiedAt         *time.Time     `gorm:"index" json:"verified_at,omitempty"` // When pharmacy was verified (shows Verified badge)
+	EstablishedYear    int            `gorm:"default:0" json:"established_year"` // Year established (e.g. 2010)
+	ReturnRefundPolicy   string         `gorm:"type:text" json:"return_refund_policy,omitempty"`   // Return and refund policy (HTML or plain text)
+	ChatEditWindowMinutes int            `gorm:"default:10" json:"chat_edit_window_minutes"`     // Minutes within which users can edit their chat messages (admin-configurable)
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Pharmacy *Pharmacy `gorm:"foreignKey:PharmacyID" json:"pharmacy,omitempty"`

@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { publicStoreApi, orderApi, promoCodeApi, resolveImageUrl } from '@/lib/api';
-import type { Product, Pharmacy, Category, CatalogSort, Promo } from '@/lib/api';
+import type { Product, Pharmacy, Category, CatalogSort, Promo, PaymentGateway } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand } from '@/contexts/BrandContext';
 import { useCart } from '@/contexts/CartContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getRecentProductIds } from '@/lib/recentlyViewed';
 import WebsiteLayout from '@/components/WebsiteLayout';
-import Loader from '@/components/Loader';
-import { Package, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X, Tag, Megaphone, Calendar, ExternalLink, Star } from 'lucide-react';
+import { Package, RefreshCw, ChevronLeft, ChevronRight, ChevronsRight, Search, X, Tag, Megaphone, Calendar, ExternalLink, Star, ShoppingCart, ChevronsLeft, Filter, Check, Sparkles } from 'lucide-react';
 
 const STORE_PAGE_SIZE = 12;
 /** Products per category in catalog view (3 rows × 4 cols = 12). */
@@ -34,7 +33,12 @@ const SORT_OPTIONS: { value: CatalogSort; labelKey: string }[] = [
   { value: 'newest', labelKey: 'sort_newest' },
 ];
 
-export default function ProductsExplorePage() {
+interface ProductsExplorePageProps {
+  /** When true, render without WebsiteLayout (e.g. inside dashboard Layout for buyers). */
+  embedded?: boolean;
+}
+
+export default function ProductsExplorePage({ embedded = false }: ProductsExplorePageProps) {
   const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [promos, setPromos] = useState<Promo[]>([]);
@@ -68,6 +72,10 @@ export default function ProductsExplorePage() {
   const [pointsToRedeem, setPointsToRedeem] = useState<number | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [recentlyViewedProducts, setRecentlyViewedProducts] = useState<Product[]>([]);
+  const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([]);
+  const [selectedPaymentGatewayId, setSelectedPaymentGatewayId] = useState<string | null>(null);
+  const [justAddedToCartId, setJustAddedToCartId] = useState<string | null>(null);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const { user } = useAuth();
   const { setPublicPharmacyId } = useBrand();
   const { t } = useLanguage();
@@ -111,6 +119,14 @@ export default function ProductsExplorePage() {
       .listCategories(selectedPharmacyId)
       .then(setCategories)
       .catch(() => setCategories([]));
+  }, [selectedPharmacyId]);
+
+  useEffect(() => {
+    if (!selectedPharmacyId) return;
+    publicStoreApi
+      .listPaymentGateways(selectedPharmacyId)
+      .then(setPaymentGateways)
+      .catch(() => setPaymentGateways([]));
   }, [selectedPharmacyId]);
 
   useEffect(() => {
@@ -242,6 +258,8 @@ export default function ProductsExplorePage() {
   const handleAddToCart = (product: Product) => {
     requireLogin(() => {
       addItem(product, 1);
+      setJustAddedToCartId(product.id);
+      setTimeout(() => setJustAddedToCartId(null), 2000);
       setCartOpen(true);
     });
   };
@@ -314,9 +332,11 @@ export default function ProductsExplorePage() {
           ...(appliedPromo ? { promo_code: appliedPromo.code } : {}),
           ...(referralCodeInput.trim() ? { referral_code: referralCodeInput.trim() } : {}),
           ...(pointsToRedeem != null && pointsToRedeem > 0 ? { points_to_redeem: pointsToRedeem } : {}),
+          ...(selectedPaymentGatewayId ? { payment_gateway_id: selectedPaymentGatewayId } : {}),
         });
         clearCart();
         clearPromo();
+        setSelectedPaymentGatewayId(null);
         setCartOpen(false);
         navigate('/orders');
       } catch (e) {
@@ -327,59 +347,109 @@ export default function ProductsExplorePage() {
     });
   };
 
-  return (
-    <WebsiteLayout
-      showCart
-      cartCount={totalCount}
-      onCartClick={() => setCartOpen(true)}
-    >
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('product_catalog')}</h1>
-            <p className="text-gray-600">
-              {t('product_catalog_subtitle_before')}
-              <Link to="/login" className="text-careplus-primary hover:underline">{t('nav_login')}</Link>
-              {t('product_catalog_subtitle_mid')}
-              <Link to="/register" className="text-careplus-primary hover:underline">{t('nav_register')}</Link>
-              {t('product_catalog_subtitle_after')}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={loading || refreshing}
-            className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-careplus-primary transition-colors disabled:opacity-50 shrink-0"
-            title={t('refresh')}
-            aria-label={t('refresh')}
-          >
-            <RefreshCw className={`w-5 h-5 ${refreshing || loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+  const cartProps = {
+    showCart: true as const,
+    cartCount: totalCount,
+    onCartClick: () => setCartOpen(true),
+  };
 
-        {pharmacies.length > 1 && (
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mr-2">{t('pharmacy_label')}</label>
-            <select
-              value={selectedPharmacyId ?? ''}
-              onChange={(e) => setSelectedPharmacyId(e.target.value || null)}
-              className="border border-gray-300 rounded-lg px-3 py-2"
-            >
-              {pharmacies.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+  const content = (
+    <>
+      <div className={embedded ? 'min-h-0' : 'min-h-screen bg-theme-bg catalog-page'}>
+        {/* Hero – teal gradient; compact so products get more space */}
+        <section className="catalog-hero relative overflow-hidden bg-careplus-primary">
+          <div className="catalog-hero-bg absolute inset-0 pointer-events-none" aria-hidden />
+          <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 relative">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-white" aria-hidden />
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white drop-shadow-sm">{t('product_catalog')}</h1>
+                </div>
+                <p className="text-xs sm:text-sm max-w-xl leading-snug text-white/95">
+                  {user
+                    ? t('product_catalog_subtitle_logged_in')
+                    : (
+                      <>
+                        {t('product_catalog_subtitle_before')}
+                        <Link to="/login" className="underline font-semibold text-white hover:text-white/95 transition-colors duration-200 decoration-2 underline-offset-2">{t('nav_login')}</Link>
+                        {t('product_catalog_subtitle_mid')}
+                        <Link to="/register" className="underline font-semibold text-white hover:text-white/95 transition-colors duration-200 decoration-2 underline-offset-2">{t('nav_register')}</Link>
+                        {t('product_catalog_subtitle_after')}
+                      </>
+                    )}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {embedded && user && (
+                  <button
+                    type="button"
+                    onClick={() => setCartOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/25 hover:bg-white/35 text-sm font-semibold text-white border border-white/30 transition-all duration-200 relative shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                    aria-label={t('nav_cart')}
+                  >
+                    <ShoppingCart className="w-5 h-5 shrink-0" />
+                    <span className="hidden sm:inline">{t('nav_cart')}</span>
+                    {totalCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-white text-careplus-primary text-xs flex items-center justify-center font-bold">
+                        {totalCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {pharmacies.length > 1 && (
+                  <select
+                    value={selectedPharmacyId ?? ''}
+                    onChange={(e) => setSelectedPharmacyId(e.target.value || null)}
+                    className="catalog-hero-select bg-white/20 border border-white/40 rounded-xl px-3 py-2.5 text-sm font-medium text-white focus:ring-2 focus:ring-white/50 focus:outline-none [&>option]:text-gray-900 [&>option]:bg-white"
+                    aria-label={t('pharmacy_label')}
+                  >
+                    {pharmacies.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={loading || refreshing}
+                  className="p-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30 active:scale-95 transition-colors disabled:opacity-60 shrink-0"
+                  title={t('refresh')}
+                  aria-label={t('refresh')}
+                >
+                  <RefreshCw className={`w-5 h-5 shrink-0 ${refreshing || loading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+            {/* Search in hero – surface bg so input text is readable */}
+            {pharmacies.length > 0 && selectedPharmacyId && (
+              <div className="relative max-w-2xl">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-theme-muted pointer-events-none" aria-hidden />
+                <input
+                  type="search"
+                  placeholder={t('search_products')}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="catalog-search-input w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-theme-input-border text-sm sm:text-base shadow-lg focus:ring-2 focus:ring-careplus-primary focus:border-careplus-primary focus:outline-none"
+                  aria-label={t('search_products_aria')}
+                />
+              </div>
+            )}
           </div>
-        )}
+        </section>
 
-        {/* Offers, announcements & events – informative promos like ads */}
+        <div className="max-w-6xl mx-auto px-4 py-4 sm:py-5 relative z-10">
+        {/* Offers, announcements & events */}
         {promos.length > 0 && (
-          <section className="mb-8" aria-label="Offers, announcements and events">
-            <h2 className="text-lg font-semibold text-gray-800 mb-3">{t('whats_on')}</h2>
-            <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
-              {promos.map((promo) => {
+          <section className="mb-10" aria-label="Offers, announcements and events">
+            <h2 className="text-xl font-bold text-theme-text mb-4 flex items-center gap-2">
+              <span className="w-1 h-6 bg-careplus-primary rounded-full" />
+              {t('whats_on')}
+            </h2>
+            <div className="flex gap-5 overflow-x-auto pb-3 snap-x snap-mandatory scroll-smooth scrollbar-thin -mx-1 px-1">
+              {promos.map((promo, idx) => {
                 const Icon =
                   promo.type === 'offer'
                     ? Tag
@@ -392,57 +462,57 @@ export default function ProductsExplorePage() {
                     : promo.type === 'announcement'
                       ? t('announcement')
                       : t('event');
-                const card = (
-                  <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
-                    <div className="aspect-[16/10] bg-gray-100 overflow-hidden">
-                      {promo.image_url ? (
-                        <img
-                          src={promo.image_url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <Icon className="w-10 h-10" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3 flex flex-col flex-1">
-                      <span className="text-xs font-medium text-careplus-primary uppercase tracking-wide">
-                        {typeLabel}
-                      </span>
-                      <h3 className="font-semibold text-gray-900 mt-0.5 line-clamp-1">{promo.title}</h3>
-                      {promo.description && (
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2 flex-1">
-                          {promo.description}
-                        </p>
-                      )}
-                      {(promo.end_at || promo.start_at) && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {promo.end_at
-                            ? `Offer ends ${new Date(promo.end_at).toLocaleDateString(undefined, { dateStyle: 'short' })}`
-                            : promo.start_at
-                              ? `Starts ${new Date(promo.start_at).toLocaleDateString(undefined, { dateStyle: 'short' })}`
-                              : null}
-                        </p>
-                      )}
-                      {promo.link_url ? (
-                        <a
-                          href={promo.link_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-careplus-primary hover:underline"
-                        >
-                          {t('learn_more')}
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                );
                 return (
-                  <div key={promo.id} className="flex-shrink-0 w-[280px] snap-start">
-                    {card}
+                  <div key={promo.id} className="flex-shrink-0 w-[300px] sm:w-[340px] snap-start">
+                    <div
+                      className="rounded-2xl border border-theme-border bg-theme-surface shadow-lg hover:shadow-xl hover:-translate-y-1.5 overflow-hidden flex flex-col min-h-0 transition-all duration-300 animate-scale-in group"
+                      style={{ animationDelay: `${idx * 0.08}s` }}
+                    >
+                      <div className="aspect-[16/10] bg-theme-bg overflow-hidden relative">
+                        {promo.image_url ? (
+                          <img
+                            src={promo.image_url}
+                            alt=""
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-theme-muted bg-gradient-to-br from-theme-border-subtle to-theme-bg">
+                            <Icon className="w-12 h-12 opacity-70" />
+                          </div>
+                        )}
+                        <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/90 dark:bg-theme-bg/90 text-careplus-primary shadow">
+                          {typeLabel}
+                        </span>
+                      </div>
+                      <div className="p-4 flex flex-col flex-1">
+                        <h3 className="font-semibold text-theme-text mt-0 line-clamp-1">{promo.title}</h3>
+                        {promo.description && (
+                          <p className="text-sm text-theme-text-secondary mt-1 line-clamp-2 flex-1">
+                            {promo.description}
+                          </p>
+                        )}
+                        {(promo.end_at || promo.start_at) && (
+                          <p className="text-xs text-theme-muted mt-2">
+                            {promo.end_at
+                              ? `Offer ends ${new Date(promo.end_at).toLocaleDateString(undefined, { dateStyle: 'short' })}`
+                              : promo.start_at
+                                ? `Starts ${new Date(promo.start_at).toLocaleDateString(undefined, { dateStyle: 'short' })}`
+                                : null}
+                          </p>
+                        )}
+                        {promo.link_url ? (
+                          <a
+                            href={promo.link_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-careplus-primary hover:underline"
+                          >
+                            {t('learn_more')}
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -451,27 +521,31 @@ export default function ProductsExplorePage() {
         )}
 
         {recentlyViewedProducts.length > 0 && (
-          <section className="mb-8" aria-label="Recently viewed">
-            <h2 className="text-lg font-semibold text-gray-800 mb-3">Recently viewed</h2>
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {recentlyViewedProducts.map((p) => (
+          <section className="mb-10" aria-label="Recently viewed">
+            <h2 className="text-xl font-bold text-theme-text mb-4 flex items-center gap-2">
+              <span className="w-1 h-6 bg-careplus-primary rounded-full" />
+              Recently viewed
+            </h2>
+            <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-thin -mx-1 px-1">
+              {recentlyViewedProducts.map((p, idx) => (
                 <Link
                   key={p.id}
                   to={`/products/${p.id}`}
-                  className="flex-shrink-0 w-40 rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden hover:ring-2 hover:ring-careplus-primary"
+                  className="flex-shrink-0 w-36 sm:w-44 snap-start rounded-xl sm:rounded-2xl border border-theme-border bg-theme-surface shadow-md overflow-hidden hover:shadow-lg hover:ring-2 hover:ring-careplus-primary/40 hover:-translate-y-1 transition-all duration-300 animate-scale-in group"
+                  style={{ animationDelay: `${idx * 0.06}s` }}
                 >
-                  <div className="aspect-square bg-gray-50">
+                  <div className="aspect-[4/3] bg-theme-bg overflow-hidden">
                     {productImageUrl(p) ? (
-                      <img src={resolveImageUrl(productImageUrl(p))} alt="" className="w-full h-full object-cover" />
+                      <img src={resolveImageUrl(productImageUrl(p))} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <Package className="w-10 h-10" />
+                      <div className="w-full h-full flex items-center justify-center text-theme-muted">
+                        <Package className="w-8 h-8 sm:w-10 sm:h-10" />
                       </div>
                     )}
                   </div>
-                  <div className="p-2">
-                    <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                    <p className="text-sm text-careplus-primary font-semibold">
+                  <div className="p-2.5 sm:p-3">
+                    <p className="text-xs sm:text-sm font-medium text-theme-text truncate">{p.name}</p>
+                    <p className="text-xs sm:text-sm text-careplus-primary font-semibold mt-0.5">
                       {p.currency} {p.unit_price.toFixed(2)}
                     </p>
                   </div>
@@ -481,25 +555,40 @@ export default function ProductsExplorePage() {
           </section>
         )}
 
-        {/* Catalog filters */}
+        {/* Category quick-jump pills (when browsing by category, no filters) */}
+        {pharmacies.length > 0 && selectedPharmacyId && !hasActiveFilters && catalogByCategory.length > 0 && (
+          <div className="mb-6">
+            <p className="text-xs font-medium text-theme-muted uppercase tracking-wider mb-2">{t('category')}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('')}
+                className="px-4 py-2 rounded-full text-sm font-medium bg-theme-surface border border-theme-border text-theme-text hover:border-careplus-primary hover:text-careplus-primary transition-colors"
+              >
+                {t('all_categories')}
+              </button>
+              {catalogByCategory.map(({ category }) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setCategoryFilter(category.name)}
+                  className="px-4 py-2 rounded-full text-sm font-medium bg-theme-surface border border-theme-border text-theme-text hover:border-careplus-primary hover:text-careplus-primary hover:shadow-md transition-all duration-200"
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Catalog filters – compact bar + collapsible advanced */}
         {pharmacies.length > 0 && selectedPharmacyId && (
-          <div className="mb-6 p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <div className="flex flex-wrap items-center gap-3 mb-3">
-              <div className="relative flex-1 min-w-[180px] max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="search"
-                  placeholder={t('search_products')}
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-careplus-primary/20 focus:border-careplus-primary"
-                  aria-label={t('search_products_aria')}
-                />
-              </div>
+          <div className="mb-8 p-4 sm:p-5 bg-theme-surface rounded-2xl border border-theme-border shadow-sm catalog-filters">
+            <div className="flex flex-wrap items-center gap-3">
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[140px]"
+                className="bg-theme-input-bg border border-theme-input-border rounded-xl px-4 py-2.5 text-sm text-theme-text min-w-[140px] focus:ring-2 focus:ring-careplus-primary/30 focus:border-careplus-primary transition-colors"
                 aria-label={t('category')}
               >
                 <option value="">{t('all_categories')}</option>
@@ -512,7 +601,7 @@ export default function ProductsExplorePage() {
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as CatalogSort)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px]"
+                className="bg-theme-input-bg border border-theme-input-border rounded-xl px-4 py-2.5 text-sm text-theme-text min-w-[160px] focus:ring-2 focus:ring-careplus-primary/30 focus:border-careplus-primary"
                 aria-label={t('sort_by')}
               >
                 {SORT_OPTIONS.map((o) => (
@@ -521,59 +610,72 @@ export default function ProductsExplorePage() {
                   </option>
                 ))}
               </select>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-xl hover:bg-theme-surface-hover transition-colors">
                 <input
                   type="checkbox"
                   checked={inStockOnly}
                   onChange={(e) => setInStockOnly(e.target.checked)}
-                  className="rounded border-gray-300 text-careplus-primary focus:ring-careplus-primary"
+                  className="rounded border-theme-input-border text-careplus-primary focus:ring-careplus-primary"
                 />
-                <span className="text-sm text-gray-700">{t('in_stock_only')}</span>
+                <span className="text-sm text-theme-text">{t('in_stock_only')}</span>
               </label>
-              <input
-                type="text"
-                placeholder="Hashtag"
-                value={hashtagFilter}
-                onChange={(e) => setHashtagFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[100px] max-w-[120px]"
-                aria-label="Filter by hashtag"
-              />
-              <input
-                type="text"
-                placeholder="Brand"
-                value={brandFilter}
-                onChange={(e) => setBrandFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[90px] max-w-[120px]"
-                aria-label="Filter by brand"
-              />
-              <input
-                type="text"
-                placeholder="Label key"
-                value={labelKeyFilter}
-                onChange={(e) => setLabelKeyFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24"
-                aria-label="Label key"
-              />
-              <input
-                type="text"
-                placeholder="Label value"
-                value={labelValueFilter}
-                onChange={(e) => setLabelValueFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24"
-                aria-label="Label value"
-              />
+              <button
+                type="button"
+                onClick={() => setFiltersExpanded((e) => !e)}
+                className="inline-flex items-center gap-2 px-3 py-2.5 text-sm text-theme-text bg-theme-input-bg border border-theme-input-border rounded-xl hover:border-careplus-primary/50 transition-colors"
+                aria-expanded={filtersExpanded}
+              >
+                <Filter className="w-4 h-4" />
+                {filtersExpanded ? 'Less filters' : 'More filters'}
+              </button>
               {hasActiveFilters && (
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-careplus-primary hover:bg-careplus-primary/10 rounded-xl transition-colors font-medium"
                 >
                   <X className="w-4 h-4" /> {t('clear_filters')}
                 </button>
               )}
             </div>
+            {filtersExpanded && (
+              <div className="mt-4 pt-4 border-t border-theme-border flex flex-wrap items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Hashtag"
+                  value={hashtagFilter}
+                  onChange={(e) => setHashtagFilter(e.target.value)}
+                  className="bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2 text-sm text-theme-text min-w-[100px] max-w-[120px] focus:ring-2 focus:ring-careplus-primary/30"
+                  aria-label="Filter by hashtag"
+                />
+                <input
+                  type="text"
+                  placeholder="Brand"
+                  value={brandFilter}
+                  onChange={(e) => setBrandFilter(e.target.value)}
+                  className="bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2 text-sm text-theme-text min-w-[90px] max-w-[120px] focus:ring-2 focus:ring-careplus-primary/30"
+                  aria-label="Filter by brand"
+                />
+                <input
+                  type="text"
+                  placeholder="Label key"
+                  value={labelKeyFilter}
+                  onChange={(e) => setLabelKeyFilter(e.target.value)}
+                  className="bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2 text-sm text-theme-text w-24 focus:ring-2 focus:ring-careplus-primary/30"
+                  aria-label="Label key"
+                />
+                <input
+                  type="text"
+                  placeholder="Label value"
+                  value={labelValueFilter}
+                  onChange={(e) => setLabelValueFilter(e.target.value)}
+                  className="bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2 text-sm text-theme-text w-24 focus:ring-2 focus:ring-careplus-primary/30"
+                  aria-label="Label value"
+                />
+              </div>
+            )}
             {hasActiveFilters && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-theme-muted mt-3">
                 {searchQ && <>Search: &quot;{searchQ}&quot;</>}
                 {categoryFilter && <> · Category: {categoryFilter}</>}
                 {inStockOnly && <> · In stock only</>}
@@ -586,28 +688,57 @@ export default function ProductsExplorePage() {
           </div>
         )}
 
-        {(loading || loadingCatalog) && <Loader variant="inline" message={t('loading')} />}
-        {error && <p className="text-red-600">{error}</p>}
+        {(loading || loadingCatalog) && (
+          <div className="space-y-10">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-theme-surface rounded-xl sm:rounded-2xl border border-theme-border overflow-hidden catalog-card-skeleton animate-fade-in">
+                  <div className="aspect-[4/3] bg-theme-border-subtle animate-pulse" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-3.5 bg-theme-border-subtle rounded w-3/4 animate-pulse" />
+                    <div className="h-4 bg-theme-border-subtle rounded w-1/2 animate-pulse" />
+                    <div className="h-9 bg-theme-border-subtle rounded-lg w-full animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-sm text-theme-muted">{t('loading')}</p>
+          </div>
+        )}
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-center">
+            {error}
+          </div>
+        )}
         {!loading && !loadingCatalog && !error && pharmacies.length === 0 && (
-          <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-gray-100">
-            <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>{t('no_store_available')}</p>
+          <div className="text-center py-20 bg-theme-surface rounded-2xl border border-theme-border shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-careplus-primary/10 flex items-center justify-center">
+              <Package className="w-10 h-10 text-careplus-primary" />
+            </div>
+            <p className="text-theme-text font-semibold text-lg">{t('no_store_available')}</p>
+            <p className="text-sm text-theme-muted mt-2 max-w-sm mx-auto">Check back later for available pharmacies.</p>
           </div>
         )}
         {!loading && !loadingCatalog && !error && pharmacies.length > 0 && !hasActiveFilters && catalogByCategory.length === 0 && (
-          <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-gray-100">
-            <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>{t('no_products_available')}</p>
+          <div className="text-center py-20 bg-theme-surface rounded-2xl border border-theme-border shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-careplus-primary/10 flex items-center justify-center">
+              <Package className="w-10 h-10 text-careplus-primary" />
+            </div>
+            <p className="text-theme-text font-semibold text-lg">{t('no_products_available')}</p>
+            <p className="text-sm text-theme-muted mt-2 max-w-sm mx-auto">Products will appear here once added.</p>
           </div>
         )}
         {!loading && !loadingCatalog && !error && pharmacies.length > 0 && hasActiveFilters && products.length === 0 && (
-          <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-gray-100">
-            <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>{t('no_products_match')}</p>
+          <div className="text-center py-20 bg-theme-surface rounded-2xl border border-theme-border shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-careplus-primary/10 flex items-center justify-center">
+              <Package className="w-10 h-10 text-careplus-primary" />
+            </div>
+            <p className="text-theme-text font-semibold text-lg">{t('no_products_match')}</p>
+            <p className="text-sm text-theme-muted mt-2 max-w-sm mx-auto">Try changing your filters or search term.</p>
             <button
               type="button"
               onClick={clearFilters}
-              className="mt-3 text-careplus-primary hover:underline text-sm font-medium"
+              className="mt-5 px-5 py-2.5 bg-careplus-primary text-theme-text-inverse font-semibold rounded-xl hover:bg-careplus-secondary transition-colors shadow-md hover:shadow-lg"
             >
               {t('clear_filters')}
             </button>
@@ -615,97 +746,99 @@ export default function ProductsExplorePage() {
         )}
         {/* Catalog by category: show category name, 8–12 products (3 rows), then See more */}
         {!loading && !loadingCatalog && !error && pharmacies.length > 0 && !hasActiveFilters && catalogByCategory.length > 0 && (
-          <div className="space-y-10">
+          <div className="space-y-14">
             {catalogByCategory.map(({ category, products: catProducts, total: catTotal }) => (
-              <section key={category.id} className="space-y-4" aria-labelledby={`category-${category.id}`}>
-                <h2 id={`category-${category.id}`} className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                  {category.name}
+              <section key={category.id} className="space-y-5" aria-labelledby={`category-${category.id}`}>
+                <h2 id={`category-${category.id}`} className="text-2xl font-bold text-theme-text flex items-center gap-3">
+                  <span className="w-1.5 h-8 bg-careplus-primary rounded-full shrink-0" />
+                  <span>{category.name}</span>
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {catProducts.map((p) => (
-                    <div
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {catProducts.map((p, idx) => (
+                    <article
                       key={p.id}
-                      className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col overflow-hidden group"
+                      className="catalog-product-card bg-theme-surface rounded-xl sm:rounded-2xl border border-theme-border shadow-md hover:shadow-xl hover:-translate-y-1 p-0 flex flex-col overflow-hidden group transition-all duration-300 animate-scale-in"
+                      style={{ animationDelay: `${Math.min(idx, 11) * 0.05}s` }}
                     >
                       <Link
                         to={`/products/${p.id}`}
-                        className="flex flex-col flex-1 min-h-0 focus:outline-none focus:ring-2 focus:ring-careplus-primary focus:ring-inset rounded-xl"
+                        className="flex flex-col flex-1 min-h-0 focus:outline-none focus:ring-2 focus:ring-careplus-primary focus:ring-inset rounded-xl sm:rounded-2xl"
                       >
-                        <div className="aspect-square -mx-4 -mt-4 mb-3 bg-gray-100 rounded-t-xl overflow-hidden">
+                        <div className="aspect-[4/3] bg-theme-bg overflow-hidden relative rounded-t-xl sm:rounded-t-2xl flex-shrink-0">
                           {productImageUrl(p) ? (
-                            <img src={resolveImageUrl(productImageUrl(p))} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                            <img src={resolveImageUrl(productImageUrl(p))} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <Package className="w-12 h-12" />
+                            <div className="w-full h-full flex items-center justify-center text-theme-muted">
+                              <Package className="w-10 h-10 sm:w-14 sm:h-14" />
                             </div>
                           )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                          {p.requires_rx ? (
-                            <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Prescription</span>
-                          ) : (
-                            <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">OTC</span>
+                          {p.stock_quantity > 0 && p.stock_quantity <= 10 && (
+                            <span className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-500/95 text-white shadow">Low stock</span>
                           )}
-                          {p.labels && Object.entries(p.labels).slice(0, 3).map(([k, v]) => (
-                            <span key={k} className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                              {k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}{v !== 'true' ? `: ${v}` : ''}
-                            </span>
-                          ))}
                         </div>
-                        <h3 className="font-medium text-gray-900 truncate group-hover:text-careplus-primary">{p.name}</h3>
-                        {(p.review_count != null && p.review_count > 0) && (
-                          <div className="flex items-center gap-1.5 mt-1 text-sm text-gray-600">
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star key={star} className={`w-4 h-4 ${(p.rating_avg ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} aria-hidden />
-                              ))}
-                            </div>
-                            <span>({p.review_count} {p.review_count === 1 ? 'review' : 'reviews'})</span>
-                          </div>
-                        )}
-                        {p.description && (
-                          <div className="mt-1 text-sm text-gray-500">
-                            <div
-                              className={`overflow-hidden text-gray-500 [&_mark]:bg-careplus-primary/20 [&_mark]:rounded [&_p]:mb-0.5 ${expandedDescriptionIds.has(p.id) ? '' : 'max-h-[2.8rem]'}`}
-                              dangerouslySetInnerHTML={{ __html: p.description }}
-                            />
-                            {descriptionTextLength(p.description) > DESCRIPTION_SEE_MORE_LENGTH && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleDescriptionExpanded(p.id); }}
-                                className="text-careplus-primary text-xs font-medium mt-0.5 hover:underline"
-                              >
-                                {expandedDescriptionIds.has(p.id) ? t('see_less') : t('see_more')}
-                              </button>
+                        <div className="p-3 flex flex-col flex-1 min-h-0">
+                          <div className="flex flex-wrap items-center gap-1 mb-1.5">
+                            {p.requires_rx ? (
+                              <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-amber-500/20 text-amber-700 dark:text-amber-400">Rx</span>
+                            ) : (
+                              <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">OTC</span>
                             )}
+                            {p.labels && Object.entries(p.labels).slice(0, 2).map(([k, v]) => (
+                              <span key={k} className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-theme-bg text-theme-text-secondary truncate max-w-[4rem] sm:max-w-none">
+                                {String(v).slice(0, 8)}{v !== 'true' && String(v).length > 8 ? '…' : ''}
+                              </span>
+                            ))}
                           </div>
-                        )}
-                        <p className="mt-2 text-careplus-primary font-semibold">
-                          {p.currency} {p.unit_price.toFixed(2)}
-                          {p.unit && <span className="text-gray-500 font-normal"> / {p.unit}</span>}
-                        </p>
-                        <p className={`text-xs ${p.stock_quantity > 0 ? 'text-gray-500' : 'text-amber-600'}`}>
-                          {p.stock_quantity > 0 ? `${t('in_stock')}: ${p.stock_quantity}` : t('out_of_stock')}
-                        </p>
+                          <h3 className="font-semibold text-sm sm:text-base text-theme-text truncate group-hover:text-careplus-primary transition-colors leading-tight">{p.name}</h3>
+                          {(p.review_count != null && p.review_count > 0) && (
+                            <div className="flex items-center gap-1 mt-1 text-xs text-theme-muted">
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star key={star} className={`w-3 h-3 sm:w-4 sm:h-4 ${(p.rating_avg ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-theme-border'}`} aria-hidden />
+                                ))}
+                              </div>
+                              <span>({p.review_count})</span>
+                            </div>
+                          )}
+                          <p className="mt-2 text-base sm:text-lg font-bold text-careplus-primary leading-tight">
+                            {p.currency} {p.unit_price.toFixed(2)}
+                            {p.unit && <span className="text-xs sm:text-sm font-normal text-theme-muted"> / {p.unit}</span>}
+                          </p>
+                          <p className={`text-[10px] sm:text-xs mt-0.5 ${p.stock_quantity > 0 ? 'text-theme-muted' : 'text-amber-600 dark:text-amber-400'}`}>
+                            {p.stock_quantity > 0 ? `${t('in_stock')}: ${p.stock_quantity}` : t('out_of_stock')}
+                          </p>
+                        </div>
                       </Link>
-                      <button
-                        onClick={(e) => { e.preventDefault(); handleAddToCart(p); }}
-                        disabled={p.stock_quantity < 1}
-                        className="mt-auto py-2 px-3 rounded-lg bg-careplus-primary text-white text-sm font-medium hover:bg-careplus-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {user ? (p.stock_quantity > 0 ? t('add_to_cart') : t('out_of_stock')) : t('login_to_add_to_cart')}
-                      </button>
-                    </div>
+                      <div className="p-3 pt-0 flex-shrink-0">
+                        <button
+                          onClick={(e) => { e.preventDefault(); handleAddToCart(p); }}
+                          disabled={p.stock_quantity < 1}
+                          className={`w-full py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 btn-press flex items-center justify-center gap-1.5 ${
+                            justAddedToCartId === p.id
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-careplus-primary text-theme-text-inverse hover:bg-careplus-secondary hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed'
+                          }`}
+                        >
+                          {justAddedToCartId === p.id ? (
+                            <>
+                              <Check className="w-4 h-4 sm:w-5 sm:h-5" /> Added
+                            </>
+                          ) : (
+                            user ? (p.stock_quantity > 0 ? t('add_to_cart') : t('out_of_stock')) : t('login_to_add_to_cart')
+                          )}
+                        </button>
+                      </div>
+                    </article>
                   ))}
                 </div>
                 {catTotal > CATALOG_PER_CATEGORY && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-end pt-2">
                     <button
                       type="button"
                       onClick={() => setCategoryFilter(category.name)}
-                      className="text-careplus-primary font-medium hover:underline inline-flex items-center gap-1"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-careplus-primary font-semibold hover:bg-careplus-primary/10 rounded-xl transition-all duration-200 btn-press border border-careplus-primary/30 hover:border-careplus-primary"
                     >
-                      {t('see_more')}
+                      {t('see_more')} in {category.name}
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -716,97 +849,112 @@ export default function ProductsExplorePage() {
         )}
         {!loading && !loadingCatalog && !error && products.length > 0 && hasActiveFilters && (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {products.map((p) => (
-                <div
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              {products.map((p, idx) => (
+                <article
                   key={p.id}
-                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-col overflow-hidden group"
+                  className="catalog-product-card bg-theme-surface rounded-xl sm:rounded-2xl border border-theme-border shadow-md hover:shadow-xl hover:-translate-y-1 p-0 flex flex-col overflow-hidden group transition-all duration-300 animate-scale-in"
+                  style={{ animationDelay: `${Math.min(idx, 11) * 0.05}s` }}
                 >
                   <Link
                     to={`/products/${p.id}`}
-                    className="flex flex-col flex-1 min-h-0 focus:outline-none focus:ring-2 focus:ring-careplus-primary focus:ring-inset rounded-xl"
+                    className="flex flex-col flex-1 min-h-0 focus:outline-none focus:ring-2 focus:ring-careplus-primary focus:ring-inset rounded-xl sm:rounded-2xl"
                   >
-                    <div className="aspect-square -mx-4 -mt-4 mb-3 bg-gray-100 rounded-t-xl overflow-hidden">
+                    <div className="aspect-[4/3] bg-theme-bg overflow-hidden relative rounded-t-xl sm:rounded-t-2xl flex-shrink-0">
                       {productImageUrl(p) ? (
-                        <img src={resolveImageUrl(productImageUrl(p))} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                        <img src={resolveImageUrl(productImageUrl(p))} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <Package className="w-12 h-12" />
+                        <div className="w-full h-full flex items-center justify-center text-theme-muted">
+                          <Package className="w-10 h-10 sm:w-14 sm:h-14" />
                         </div>
                       )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                      {p.requires_rx ? (
-                        <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-                          Prescription
-                        </span>
-                      ) : (
-                        <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-                          OTC
-                        </span>
-                      )}
-                      {p.labels && Object.entries(p.labels).slice(0, 3).map(([k, v]) => (
-                        <span key={k} className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                          {k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}{v !== 'true' ? `: ${v}` : ''}
-                        </span>
-                      ))}
-                    </div>
-                    <h3 className="font-medium text-gray-900 truncate group-hover:text-careplus-primary">{p.name}</h3>
-                    {(p.review_count != null && p.review_count > 0) && (
-                      <div className="flex items-center gap-1.5 mt-1 text-sm text-gray-600">
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
-                              key={star}
-                              className={`w-4 h-4 ${(p.rating_avg ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`}
-                              aria-hidden
-                            />
-                          ))}
-                        </div>
-                        <span>({p.review_count} {p.review_count === 1 ? 'review' : 'reviews'})</span>
+                      <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 flex flex-wrap gap-1">
+                        {(p.discount_percent ?? 0) > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-emerald-600 text-white shadow">
+                            {Math.round(p.discount_percent)}% off
+                          </span>
+                        )}
+                        {p.stock_quantity > 0 && p.stock_quantity <= 10 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-500/95 text-white shadow">Low stock</span>
+                        )}
+                        {p.created_at && (() => {
+                          const daysSince = (Date.now() - new Date(p.created_at).getTime()) / (24 * 60 * 60 * 1000);
+                          return daysSince <= 30 ? <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-careplus-primary/95 text-white shadow">New</span> : null;
+                        })()}
                       </div>
-                    )}
-                    {p.description && (
-                      <div className="mt-1 text-sm text-gray-500">
-                        <div
-                          className={`overflow-hidden text-gray-500 [&_mark]:bg-careplus-primary/20 [&_mark]:rounded [&_p]:mb-0.5 ${expandedDescriptionIds.has(p.id) ? '' : 'max-h-[2.8rem]'}`}
-                          dangerouslySetInnerHTML={{ __html: p.description }}
-                        />
-                        {descriptionTextLength(p.description) > DESCRIPTION_SEE_MORE_LENGTH && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleDescriptionExpanded(p.id); }}
-                            className="text-careplus-primary text-xs font-medium mt-0.5 hover:underline"
-                          >
-                            {expandedDescriptionIds.has(p.id) ? t('see_less') : t('see_more')}
-                          </button>
+                    </div>
+                    <div className="p-3 flex flex-col flex-1 min-h-0">
+                      <div className="flex flex-wrap items-center gap-1 mb-1.5">
+                        {p.requires_rx ? (
+                          <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-amber-500/20 text-amber-700 dark:text-amber-400">Rx</span>
+                        ) : (
+                          <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">OTC</span>
+                        )}
+                        {p.labels && Object.entries(p.labels).slice(0, 2).map(([k, v]) => (
+                          <span key={k} className="inline-flex px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-theme-bg text-theme-text-secondary truncate max-w-[4rem] sm:max-w-none">
+                            {String(v).slice(0, 8)}{v !== 'true' && String(v).length > 8 ? '…' : ''}
+                          </span>
+                        ))}
+                      </div>
+                      <h3 className="font-semibold text-sm sm:text-base text-theme-text truncate group-hover:text-careplus-primary transition-colors leading-tight">{p.name}</h3>
+                      {(p.review_count != null && p.review_count > 0) && (
+                        <div className="flex items-center gap-1 mt-1 text-xs text-theme-muted">
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star key={star} className={`w-3 h-3 sm:w-4 sm:h-4 ${(p.rating_avg ?? 0) >= star ? 'fill-amber-400 text-amber-400' : 'text-theme-border'}`} aria-hidden />
+                            ))}
+                          </div>
+                          <span>({p.review_count})</span>
+                        </div>
+                      )}
+                      <div className="mt-2">
+                        {(p.discount_percent ?? 0) > 0 ? (
+                          <div className="flex flex-wrap items-baseline gap-1.5">
+                            <span className="text-xs sm:text-sm text-theme-muted line-through">
+                              {p.currency} {(p.unit_price / (1 - (p.discount_percent! / 100))).toFixed(2)}
+                            </span>
+                            <span className="text-base sm:text-lg font-bold text-careplus-primary">
+                              {p.currency} {p.unit_price.toFixed(2)}
+                              {p.unit && <span className="text-xs sm:text-sm font-normal text-theme-muted"> / {p.unit}</span>}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-base sm:text-lg font-bold text-careplus-primary leading-tight">
+                            {p.currency} {p.unit_price.toFixed(2)}
+                            {p.unit && <span className="text-xs sm:text-sm font-normal text-theme-muted"> / {p.unit}</span>}
+                          </p>
                         )}
                       </div>
-                    )}
-                    <p className="mt-2 text-careplus-primary font-semibold">
-                      {p.currency} {p.unit_price.toFixed(2)}
-                      {p.unit && <span className="text-gray-500 font-normal"> / {p.unit}</span>}
-                    </p>
-                    <p className={`text-xs ${p.stock_quantity > 0 ? 'text-gray-500' : 'text-amber-600'}`}>
-                      {p.stock_quantity > 0 ? `${t('in_stock')}: ${p.stock_quantity}` : t('out_of_stock')}
-                    </p>
+                      <p className={`text-[10px] sm:text-xs mt-0.5 ${p.stock_quantity > 0 ? 'text-theme-muted' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {p.stock_quantity > 0 ? `${t('in_stock')}: ${p.stock_quantity}` : t('out_of_stock')}
+                      </p>
+                    </div>
                   </Link>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleAddToCart(p);
-                    }}
-                    disabled={p.stock_quantity < 1}
-                    className="mt-auto py-2 px-3 rounded-lg bg-careplus-primary text-white text-sm font-medium hover:bg-careplus-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {user ? (p.stock_quantity > 0 ? t('add_to_cart') : t('out_of_stock')) : t('login_to_add_to_cart')}
-                  </button>
-                </div>
+                  <div className="p-3 pt-0 flex-shrink-0">
+                    <button
+                      onClick={(e) => { e.preventDefault(); handleAddToCart(p); }}
+                      disabled={p.stock_quantity < 1}
+                      className={`w-full py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 btn-press flex items-center justify-center gap-1.5 ${
+                        justAddedToCartId === p.id
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-careplus-primary text-theme-text-inverse hover:bg-careplus-secondary hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed'
+                      }`}
+                    >
+                      {justAddedToCartId === p.id ? (
+                        <>
+                          <Check className="w-4 h-4 sm:w-5 sm:h-5" /> Added
+                        </>
+                      ) : (
+                        user ? (p.stock_quantity > 0 ? t('add_to_cart') : t('out_of_stock')) : t('login_to_add_to_cart')
+                      )}
+                    </button>
+                  </div>
+                </article>
               ))}
             </div>
             {total > STORE_PAGE_SIZE && (
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-6 py-4">
-                <span className="text-sm text-gray-600 mr-2">
+              <nav className="flex flex-wrap items-center justify-center gap-4 mt-10 py-6 bg-theme-surface rounded-2xl border border-theme-border shadow-sm" aria-label="Pagination">
+                <span className="text-sm text-theme-muted">
                   {t('page_of', { page: String(page), totalPages: String(totalPages), total: String(total) })}
                 </span>
                 <div className="flex items-center gap-1">
@@ -814,7 +962,7 @@ export default function ProductsExplorePage() {
                     type="button"
                     onClick={() => goToPage(1)}
                     disabled={!canPrev}
-                    className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2.5 rounded-xl text-theme-muted hover:bg-careplus-primary/10 hover:text-careplus-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     aria-label="First page"
                   >
                     <ChevronsLeft className="w-5 h-5" />
@@ -823,19 +971,19 @@ export default function ProductsExplorePage() {
                     type="button"
                     onClick={() => goToPage(page - 1)}
                     disabled={!canPrev}
-                    className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2.5 rounded-xl text-theme-muted hover:bg-careplus-primary/10 hover:text-careplus-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     aria-label="Previous page"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <span className="px-3 py-1 text-sm font-medium text-gray-700 min-w-[4rem] text-center">
+                  <span className="px-4 py-2 text-sm font-semibold text-theme-text min-w-[4rem] text-center bg-theme-bg rounded-xl">
                     {page} / {totalPages}
                   </span>
                   <button
                     type="button"
                     onClick={() => goToPage(page + 1)}
                     disabled={!canNext}
-                    className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2.5 rounded-xl text-theme-muted hover:bg-careplus-primary/10 hover:text-careplus-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     aria-label="Next page"
                   >
                     <ChevronRight className="w-5 h-5" />
@@ -844,45 +992,52 @@ export default function ProductsExplorePage() {
                     type="button"
                     onClick={() => goToPage(totalPages)}
                     disabled={!canNext}
-                    className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="p-2.5 rounded-xl text-theme-muted hover:bg-careplus-primary/10 hover:text-careplus-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     aria-label="Last page"
                   >
                     <ChevronsRight className="w-5 h-5" />
                   </button>
                 </div>
-              </div>
+              </nav>
             )}
           </>
         )}
+        </div>
       </div>
 
       {cartOpen && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setCartOpen(false)} />
-          <div className="fixed top-0 right-0 w-full max-w-md h-full bg-white shadow-xl z-50 flex flex-col">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{t('cart_items', { count: totalCount })}</h2>
-              <button onClick={() => setCartOpen(false)} className="text-gray-500 hover:text-gray-700 text-xl leading-none">
+          <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm animate-fade-in" onClick={() => setCartOpen(false)} aria-hidden />
+          <div className="fixed top-0 right-0 w-full max-w-md h-full bg-theme-surface shadow-2xl z-50 flex flex-col border-l border-theme-border animate-slide-in-right">
+            <div className="p-5 border-b border-theme-border flex items-center justify-between bg-theme-bg">
+              <h2 className="text-xl font-bold text-theme-text">{t('cart_items', { count: totalCount })}</h2>
+              <button onClick={() => setCartOpen(false)} className="p-2 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-surface-hover transition-colors text-2xl leading-none" aria-label="Close cart">
                 ×
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4">
+            <div className="flex-1 overflow-auto p-5">
               {items.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">{t('your_cart_empty')}</p>
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-theme-bg flex items-center justify-center">
+                    <Package className="w-8 h-8 text-theme-muted" />
+                  </div>
+                  <p className="text-theme-text font-medium">{t('your_cart_empty')}</p>
+                  <p className="text-sm text-theme-muted mt-1">Add items from the catalog to get started.</p>
+                </div>
               ) : (
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {items.map((i) => (
-                    <li key={i.product.id} className="flex gap-3 items-center border-b pb-2">
+                    <li key={i.product.id} className="flex gap-4 items-center p-3 rounded-xl bg-theme-bg border border-theme-border">
                       {productImageUrl(i.product) ? (
-                        <img src={resolveImageUrl(productImageUrl(i.product))} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
+                        <img src={resolveImageUrl(productImageUrl(i.product))} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
                       ) : (
-                        <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center shrink-0">
-                          <Package className="w-6 h-6 text-gray-400" />
+                        <div className="w-14 h-14 rounded-xl bg-theme-surface flex items-center justify-center shrink-0">
+                          <Package className="w-7 h-7 text-theme-muted" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium">{i.product.name}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="font-semibold text-theme-text truncate">{i.product.name}</p>
+                        <p className="text-sm text-theme-muted mt-0.5">
                           {i.product.currency} {i.product.unit_price.toFixed(2)} × {i.quantity}
                         </p>
                       </div>
@@ -893,11 +1048,11 @@ export default function ProductsExplorePage() {
                           max={i.product.stock_quantity}
                           value={i.quantity}
                           onChange={(e) => updateQuantity(i.product.id, parseInt(e.target.value, 10) || 1)}
-                          className="w-14 border rounded px-2 py-1 text-center"
+                          className="w-14 bg-theme-input-bg border border-theme-input-border rounded-lg px-2 py-1.5 text-center text-theme-text text-sm"
                         />
                         <button
                           onClick={() => removeItem(i.product.id)}
-                          className="text-red-600 text-sm hover:underline"
+                          className="text-red-600 dark:text-red-400 text-sm font-medium hover:underline"
                         >
                           {t('remove')}
                         </button>
@@ -907,21 +1062,21 @@ export default function ProductsExplorePage() {
                 </ul>
               )}
             </div>
-            <div className="p-4 border-t">
+            <div className="p-5 border-t border-theme-border bg-theme-bg">
               {user && items.length > 0 && (
-                <div className="mb-3 space-y-2">
-                  <p className="text-xs text-gray-500">First order? Try a welcome code if you have one.</p>
+                <div className="mb-4 space-y-3">
+                  <p className="text-xs text-theme-muted">First order? Try a welcome code if you have one.</p>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       placeholder="Promo code"
                       value={promoCodeInput}
                       onChange={(e) => { setPromoCodeInput(e.target.value); setPromoError(''); }}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
                       disabled={!!appliedPromo}
                     />
                     {appliedPromo ? (
-                      <button type="button" onClick={clearPromo} className="px-3 py-2 text-sm text-gray-600 hover:underline">
+                      <button type="button" onClick={clearPromo} className="px-4 py-2.5 text-sm text-theme-muted hover:text-theme-text font-medium rounded-xl hover:bg-theme-surface-hover transition-colors">
                         {t('remove')}
                       </button>
                     ) : (
@@ -929,45 +1084,73 @@ export default function ProductsExplorePage() {
                         type="button"
                         onClick={handleApplyPromo}
                         disabled={applyingPromo || !promoCodeInput.trim()}
-                        className="px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                        className="px-4 py-2.5 bg-theme-surface-hover text-theme-text text-sm font-medium rounded-xl hover:bg-theme-border disabled:opacity-50 transition-colors"
                       >
                         {applyingPromo ? 'Applying...' : 'Apply'}
                       </button>
                     )}
                   </div>
-                  {promoError && <p className="text-sm text-red-600">{promoError}</p>}
+                  {promoError && <p className="text-sm text-red-600 dark:text-red-400">{promoError}</p>}
                   {appliedPromo && (
-                    <p className="text-sm text-green-600">Code applied: NPR {appliedPromo.discountAmount.toFixed(2)} off</p>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Code applied: NPR {appliedPromo.discountAmount.toFixed(2)} off</p>
                   )}
                   <div>
-                    <label className="text-sm text-gray-600 block mb-1">Phone (for points & referral)</label>
+                    <label className="text-sm text-theme-muted block mb-1">Phone (for points & referral)</label>
                     <input
                       type="text"
                       placeholder="Phone number"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      className="w-full bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
                     />
                   </div>
                   <div>
-                    <label className="text-sm text-gray-600 block mb-1">Referral code</label>
+                    <label className="text-sm text-theme-muted block mb-1">Referral code</label>
                     <input
                       type="text"
                       placeholder="Friend's referral code"
                       value={referralCodeInput}
                       onChange={(e) => setReferralCodeInput(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      className="w-full bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
                     />
                   </div>
                   {pointsToRedeem != null && pointsToRedeem > 0 && (
-                    <p className="text-sm text-gray-600">Using {pointsToRedeem} points</p>
+                    <p className="text-sm text-theme-muted">Using {pointsToRedeem} points</p>
                   )}
                 </div>
               )}
-              <p className="font-semibold text-gray-800 mb-2">
+              {items.length > 0 && paymentGateways.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-theme-text mb-2">{t('payment_method')}</p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {paymentGateways.map((gw) => (
+                      <label
+                        key={gw.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                          selectedPaymentGatewayId === gw.id
+                            ? 'border-careplus-primary bg-careplus-primary/10'
+                            : 'border-theme-border hover:bg-theme-bg'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="payment-gateway"
+                          value={gw.id}
+                          checked={selectedPaymentGatewayId === gw.id}
+                          onChange={() => setSelectedPaymentGatewayId(gw.id)}
+                          className="rounded-full border-theme-border text-careplus-primary focus:ring-careplus-primary"
+                        />
+                        <span className="text-sm font-medium text-theme-text">{gw.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="font-bold text-theme-text text-lg mb-3">
                 {appliedPromo ? (
                   <>
-                    Subtotal: NPR {totalAmount.toFixed(2)} · Discount: -NPR {appliedPromo.discountAmount.toFixed(2)}<br />
+                    <span className="text-theme-muted font-normal text-sm">Subtotal NPR {totalAmount.toFixed(2)} · Discount -NPR {appliedPromo.discountAmount.toFixed(2)}</span>
+                    <br />
                     {t('total')} NPR {orderTotal.toFixed(2)}
                   </>
                 ) : (
@@ -977,7 +1160,7 @@ export default function ProductsExplorePage() {
               <button
                 onClick={handlePlaceOrder}
                 disabled={items.length === 0 || placing}
-                className="w-full py-2.5 bg-careplus-primary text-white font-medium rounded-lg hover:bg-careplus-secondary disabled:opacity-50"
+                className="w-full py-3.5 bg-careplus-primary text-theme-text-inverse font-semibold rounded-xl hover:bg-careplus-secondary hover:shadow-lg active:scale-[0.98] disabled:opacity-50 transition-all duration-200 btn-press"
               >
                 {placing ? t('placing') : user ? t('place_order') : t('login_to_place_order')}
               </button>
@@ -985,6 +1168,11 @@ export default function ProductsExplorePage() {
           </div>
         </>
       )}
-    </WebsiteLayout>
+    </>
   );
+
+  if (embedded) {
+    return <div className="flex flex-col min-h-0 flex-1">{content}</div>;
+  }
+  return <WebsiteLayout {...cartProps}>{content}</WebsiteLayout>;
 }

@@ -29,6 +29,8 @@ export interface BrandState {
   primaryColor: string | null;
   verifiedAt: string | null;
   loading: boolean;
+  /** When on public store: selected pharmacy id (for policy/config by pharmacy). */
+  publicPharmacyId: string | null;
 }
 
 interface BrandContextValue extends BrandState {
@@ -104,6 +106,7 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     primaryColor,
     verifiedAt,
     loading,
+    publicPharmacyId,
     setPublicPharmacyId: setPublicPharmacyIdCb,
     refreshBrand,
   };

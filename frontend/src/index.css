@@ -121,3 +121,74 @@ body {
 .dark .disabled\:cursor-not-allowed:disabled {
   cursor: not-allowed;
 }
+
+/* Product page: scale-in starts hidden so stagger works; fade-in-up only for small elements */
+.animate-scale-in { opacity: 0; }
+.animate-scale-in[style*="animationDelay"] { animation-fill-mode: forwards; }
+.animate-stagger-1 { animation-delay: 0.05s; }
+.animate-stagger-2 { animation-delay: 0.1s; }
+.animate-stagger-3 { animation-delay: 0.15s; }
+.animate-stagger-4 { animation-delay: 0.2s; }
+.animate-stagger-5 { animation-delay: 0.25s; }
+.animate-stagger-6 { animation-delay: 0.3s; }
+.animate-stagger-7 { animation-delay: 0.35s; }
+.animate-stagger-8 { animation-delay: 0.4s; }
+.animate-stagger-9 { animation-delay: 0.45s; }
+.animate-stagger-10 { animation-delay: 0.5s; }
+.animate-stagger-11 { animation-delay: 0.55s; }
+.animate-stagger-12 { animation-delay: 0.6s; }
+
+/* Button press feel */
+.btn-press:active {
+  transform: scale(0.97);
+}
+.transition-transform {
+  transition-property: transform, box-shadow, background-color, color, border-color;
+}
+
+/* Catalog page – hero and layout (works in both embedded and standalone) */
+.catalog-hero {
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 50%, #0d9488 100%);
+  color: #fff;
+}
+.catalog-hero-bg {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255,255,255,0.2) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255,255,255,0.1) 0%, transparent 40%);
+}
+.catalog-hero .catalog-search-input {
+  color: var(--theme-text);
+  background: var(--theme-surface);
+}
+.catalog-hero .catalog-search-input::placeholder {
+  color: var(--theme-text-muted);
+}
+.catalog-product-card:focus-within {
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
+}
+.dark .catalog-product-card:focus-within {
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.4);
+}
+/* Skeleton pulse for catalog cards */
+.catalog-card-skeleton {
+  animation: catalog-skeleton-pulse 1.5s ease-in-out infinite;
+}
+@keyframes catalog-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+/* Loader: reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  [class*='animate-loader-spin'],
+  [class*='animate-loader-pulse-ring'],
+  [class*='animate-loader-dot'],
+  [class*='animate-loader-shimmer'] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  [class*='animate-loader-shimmer']::before {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -17,6 +17,15 @@ type AuthService interface {
 	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
 }
 
+// UserAddressService manages addresses for the logged-in user (profile settings).
+type UserAddressService interface {
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.UserAddress, error)
+	Create(ctx context.Context, userID uuid.UUID, label, line1, line2, city, state, postalCode, country, phone string, setAsDefault bool) (*models.UserAddress, error)
+	Update(ctx context.Context, userID uuid.UUID, id uuid.UUID, label, line1, line2, city, state, postalCode, country, phone *string, setAsDefault *bool) (*models.UserAddress, error)
+	Delete(ctx context.Context, userID uuid.UUID, id uuid.UUID) error
+	SetDefault(ctx context.Context, userID uuid.UUID, id uuid.UUID) (*models.UserAddress, error)
+}
+
 // UserService is for admin/manager to manage staff (create/update/deactivate). List/Get enforce role scope.
 type UserService interface {
 	// List returns users for the pharmacy; if actorRole is manager, only pharmacists are returned.
@@ -90,9 +99,9 @@ type ProductService interface {
 }
 
 type OrderService interface {
-	Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []OrderItemInput, notes string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int) (*models.Order, error)
+	Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []OrderItemInput, notes string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int, paymentGatewayID *uuid.UUID) (*models.Order, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Order, error)
-	List(ctx context.Context, pharmacyID uuid.UUID, status *string) ([]*models.Order, error)
+	List(ctx context.Context, pharmacyID uuid.UUID, createdBy *uuid.UUID, status *string) ([]*models.Order, error)
 	UpdateStatus(ctx context.Context, orderID uuid.UUID, status models.OrderStatus) (*models.Order, error)
 	Accept(ctx context.Context, orderID uuid.UUID) (*models.Order, error)
 }
@@ -109,6 +118,14 @@ type PaymentService interface {
 	ListByOrder(ctx context.Context, orderID uuid.UUID) ([]*models.Payment, error)
 	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID) ([]*models.Payment, error)
 	Complete(ctx context.Context, paymentID uuid.UUID) error
+}
+
+type PaymentGatewayService interface {
+	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, activeOnly bool) ([]*models.PaymentGateway, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.PaymentGateway, error)
+	Create(ctx context.Context, pharmacyID uuid.UUID, pg *models.PaymentGateway) (*models.PaymentGateway, error)
+	Update(ctx context.Context, pharmacyID uuid.UUID, pg *models.PaymentGateway) (*models.PaymentGateway, error)
+	Delete(ctx context.Context, pharmacyID, id uuid.UUID) error
 }
 
 type PharmacyConfigService interface {
@@ -269,4 +286,30 @@ type ReferralPointsService interface {
 	// GetCustomerByPhoneWithMembership returns customer with optional membership (id, name) for billing display.
 	GetCustomerByPhoneWithMembership(ctx context.Context, pharmacyID uuid.UUID, phone string) (*CustomerWithMembership, error)
 	ListPointsTransactions(ctx context.Context, customerID uuid.UUID, limit, offset int) ([]*models.PointsTransaction, error)
+}
+
+type AnnouncementService interface {
+	Create(ctx context.Context, pharmacyID uuid.UUID, a *models.Announcement) (*models.Announcement, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Announcement, error)
+	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, activeOnly bool) ([]*models.Announcement, error)
+	Update(ctx context.Context, pharmacyID uuid.UUID, a *models.Announcement) (*models.Announcement, error)
+	Delete(ctx context.Context, pharmacyID, id uuid.UUID) error
+	// ListActiveForUser returns announcements to show on dashboard (not yet acked, within dates, and user has not "skip all" in last 24h).
+	ListActiveForUser(ctx context.Context, pharmacyID, userID uuid.UUID) ([]*models.Announcement, error)
+	// Acknowledge records that user dismissed one announcement or chose "skip all".
+	Acknowledge(ctx context.Context, userID, announcementID uuid.UUID, skipAll bool) error
+}
+
+type ChatService interface {
+	GetOrCreateConversation(ctx context.Context, pharmacyID, customerID uuid.UUID) (*models.Conversation, error)
+	GetOrCreateConversationForUser(ctx context.Context, pharmacyID, userID uuid.UUID) (*models.Conversation, error)
+	GetConversationByPharmacyAndCustomer(ctx context.Context, pharmacyID, customerID uuid.UUID) (*models.Conversation, error)
+	ListConversations(ctx context.Context, pharmacyID uuid.UUID, userID *uuid.UUID, limit, offset int) ([]*models.Conversation, int64, error)
+	GetConversationByID(ctx context.Context, conversationID, pharmacyID uuid.UUID, customerID *uuid.UUID, userID *uuid.UUID, role string) (*models.Conversation, error)
+	ListMessages(ctx context.Context, conversationID, pharmacyID uuid.UUID, customerID *uuid.UUID, userID *uuid.UUID, role string, limit, offset int) ([]*models.ChatMessage, int64, error)
+	SendMessage(ctx context.Context, conversationID uuid.UUID, senderType string, senderID uuid.UUID, body, attachmentURL, attachmentName, attachmentType string) (*models.ChatMessage, error)
+	EditMessage(ctx context.Context, conversationID, messageID, pharmacyID uuid.UUID, customerID *uuid.UUID, userID *uuid.UUID, role string, body string) (*models.ChatMessage, error)
+	DeleteMessage(ctx context.Context, conversationID, messageID, pharmacyID uuid.UUID, customerID *uuid.UUID, userID *uuid.UUID, role string) error
+	DeleteConversation(ctx context.Context, conversationID, pharmacyID uuid.UUID, customerID *uuid.UUID, userID *uuid.UUID, role string) error
+	GetChatEditWindowMinutes(ctx context.Context, pharmacyID uuid.UUID) int
 }

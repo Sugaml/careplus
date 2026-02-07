@@ -70,4 +70,9 @@ func applyInput(dst *models.PharmacyConfig, src *models.PharmacyConfig) {
 	dst.ContactPhone = src.ContactPhone
 	dst.ContactEmail = src.ContactEmail
 	dst.PrimaryColor = src.PrimaryColor
+	dst.LicenseNo = src.LicenseNo
+	dst.VerifiedAt = src.VerifiedAt
+	dst.EstablishedYear = src.EstablishedYear
+	dst.ReturnRefundPolicy = src.ReturnRefundPolicy
+	dst.ChatEditWindowMinutes = src.ChatEditWindowMinutes
 }

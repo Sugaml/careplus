@@ -16,9 +16,18 @@ type TokenClaims struct {
 	ExpiresAt  time.Time
 }
 
+// ChatCustomerClaims is used for customer chat access (short-lived token).
+type ChatCustomerClaims struct {
+	PharmacyID uuid.UUID
+	CustomerID uuid.UUID
+	ExpiresAt  time.Time
+}
+
 type AuthProvider interface {
 	GenerateAccessToken(userID, pharmacyID uuid.UUID, role string) (string, error)
 	GenerateRefreshToken(userID uuid.UUID) (string, error)
 	ValidateAccessToken(tokenString string) (*TokenClaims, error)
 	ValidateRefreshToken(tokenString string) (userID uuid.UUID, err error)
+	GenerateChatCustomerToken(pharmacyID, customerID uuid.UUID) (string, error)
+	ValidateChatCustomerToken(tokenString string) (*ChatCustomerClaims, error)
 }

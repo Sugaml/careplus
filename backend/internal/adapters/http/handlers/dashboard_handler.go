@@ -66,8 +66,16 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 
 	resp := DashboardStatsResponse{}
 
-	// Orders count
-	orders, err := h.orderService.List(ctx, pharmacyID, nil)
+	// Orders count: end users (staff) see only their order count; others see pharmacy total
+	var createdBy *uuid.UUID
+	if roleStr == "staff" {
+		if userIDStr, ok := c.Get("user_id"); ok && userIDStr != nil {
+			if uid, parseErr := uuid.Parse(userIDStr.(string)); parseErr == nil {
+				createdBy = &uid
+			}
+		}
+	}
+	orders, err := h.orderService.List(ctx, pharmacyID, createdBy, nil)
 	if err != nil {
 		h.logger.Error("dashboard orders list failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: "failed to load dashboard stats"})

@@ -6,6 +6,7 @@ import {
   invoiceApi,
 } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Loader from '@/components/Loader';
 import { ShoppingCart, Check, ChevronDown, Loader2, FileText, RefreshCw } from 'lucide-react';
@@ -40,8 +41,13 @@ function statusBadgeClass(status: string): string {
   }
 }
 
+/** End users (role "staff") only see their own orders and cannot accept or change status. */
+const STAFF_CAN_MANAGE_ORDERS = ['admin', 'manager', 'pharmacist'];
+
 export default function OrdersPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canManageOrders = user?.role && STAFF_CAN_MANAGE_ORDERS.includes(user.role);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -137,7 +143,9 @@ export default function OrdersPage() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Orders</h1>
+        <h1 className="text-2xl font-bold text-gray-800">
+          {canManageOrders ? 'Orders' : 'My orders'}
+        </h1>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -183,7 +191,9 @@ export default function OrdersPage() {
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Status</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-700">Total</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Date</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-gray-700">Actions</th>
+                {canManageOrders && (
+                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-700">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -206,77 +216,79 @@ export default function OrdersPage() {
                     <td className="px-4 py-3 text-gray-600">
                       {new Date(o.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => handleCreateInvoice(o)}
-                          disabled={createInvoiceId === o.id}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                          title="Create invoice"
-                        >
-                          {createInvoiceId === o.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <FileText className="w-4 h-4" />
-                          )}
-                          Invoice
-                        </button>
-                        {o.status === 'pending' && (
+                    {canManageOrders && (
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2 flex-wrap">
                           <button
                             type="button"
-                            onClick={() => handleAcceptClick(o)}
-                            disabled={isActing}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                            onClick={() => handleCreateInvoice(o)}
+                            disabled={createInvoiceId === o.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                            title="Create invoice"
                           >
-                            {isActing ? (
+                            {createInvoiceId === o.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
-                              <Check className="w-4 h-4" />
+                              <FileText className="w-4 h-4" />
                             )}
-                            Accept
+                            Invoice
                           </button>
-                        )}
-                        {next.length > 0 && (
-                          <div className="relative">
+                          {o.status === 'pending' && (
                             <button
                               type="button"
-                              onClick={() =>
-                                setOpenDropdown(isDropdownOpen ? null : o.id)
-                              }
+                              onClick={() => handleAcceptClick(o)}
                               disabled={isActing}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
                             >
-                              Change status
-                              <ChevronDown
-                                className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
-                              />
+                              {isActing ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Check className="w-4 h-4" />
+                              )}
+                              Accept
                             </button>
-                            {isDropdownOpen && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-10"
-                                  aria-hidden
-                                  onClick={() => setOpenDropdown(null)}
+                          )}
+                          {next.length > 0 && (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenDropdown(isDropdownOpen ? null : o.id)
+                                }
+                                disabled={isActing}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                              >
+                                Change status
+                                <ChevronDown
+                                  className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
                                 />
-                                <div className="absolute right-0 top-full mt-1 z-20 min-w-[140px] py-1 rounded-lg bg-white border border-gray-200 shadow-lg">
-                                  {next.map((s) => (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      onClick={() => handleStatusChangeClick(o, s)}
-                                      className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 capitalize"
-                                    >
-                                      {s}
-                                    </button>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                              </button>
+                              {isDropdownOpen && (
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-10"
+                                    aria-hidden
+                                    onClick={() => setOpenDropdown(null)}
+                                  />
+                                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[140px] py-1 rounded-lg bg-white border border-gray-200 shadow-lg">
+                                    {next.map((s) => (
+                                      <button
+                                        key={s}
+                                        type="button"
+                                        onClick={() => handleStatusChangeClick(o, s)}
+                                        className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 capitalize"
+                                      >
+                                        {s}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

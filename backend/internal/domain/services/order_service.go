@@ -20,14 +20,32 @@ type orderService struct {
 	customerRepo           outbound.CustomerRepository
 	customerMembershipRepo outbound.CustomerMembershipRepository
 	referralPointsSvc      inbound.ReferralPointsService
+	paymentGatewayRepo     outbound.PaymentGatewayRepository
+	paymentSvc             inbound.PaymentService
 	logger                 *zap.Logger
 }
 
-func NewOrderService(orderRepo outbound.OrderRepository, productRepo outbound.ProductRepository, inventoryService inbound.InventoryService, promoCodeRepo outbound.PromoCodeRepository, promoCodeSvc inbound.PromoCodeService, customerRepo outbound.CustomerRepository, customerMembershipRepo outbound.CustomerMembershipRepository, referralPointsSvc inbound.ReferralPointsService, logger *zap.Logger) inbound.OrderService {
-	return &orderService{orderRepo: orderRepo, productRepo: productRepo, inventoryService: inventoryService, promoCodeRepo: promoCodeRepo, promoCodeSvc: promoCodeSvc, customerRepo: customerRepo, customerMembershipRepo: customerMembershipRepo, referralPointsSvc: referralPointsSvc, logger: logger}
+func NewOrderService(orderRepo outbound.OrderRepository, productRepo outbound.ProductRepository, inventoryService inbound.InventoryService, promoCodeRepo outbound.PromoCodeRepository, promoCodeSvc inbound.PromoCodeService, customerRepo outbound.CustomerRepository, customerMembershipRepo outbound.CustomerMembershipRepository, referralPointsSvc inbound.ReferralPointsService, paymentGatewayRepo outbound.PaymentGatewayRepository, paymentSvc inbound.PaymentService, logger *zap.Logger) inbound.OrderService {
+	return &orderService{orderRepo: orderRepo, productRepo: productRepo, inventoryService: inventoryService, promoCodeRepo: promoCodeRepo, promoCodeSvc: promoCodeSvc, customerRepo: customerRepo, customerMembershipRepo: customerMembershipRepo, referralPointsSvc: referralPointsSvc, paymentGatewayRepo: paymentGatewayRepo, paymentSvc: paymentSvc, logger: logger}
 }
 
-func (s *orderService) Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []inbound.OrderItemInput, notes string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int) (*models.Order, error) {
+// gatewayCodeToPaymentMethod maps payment gateway code to Payment method for recording.
+func gatewayCodeToPaymentMethod(code string) models.PaymentMethod {
+	switch code {
+	case models.GatewayCodeEsewa, models.GatewayCodeKhalti:
+		return models.PaymentMethodWallet
+	case models.GatewayCodeQR:
+		return models.PaymentMethodQR
+	case models.GatewayCodeCOD:
+		return models.PaymentMethodCOD
+	case models.GatewayCodeFonepay:
+		return models.PaymentMethodFonepay
+	default:
+		return models.PaymentMethodOther
+	}
+}
+
+func (s *orderService) Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []inbound.OrderItemInput, notes string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int, paymentGatewayID *uuid.UUID) (*models.Order, error) {
 	if len(items) == 0 {
 		return nil, errors.ErrValidation("at least one item is required")
 	}
@@ -151,6 +169,27 @@ func (s *orderService) Create(ctx context.Context, pharmacyID, createdBy uuid.UU
 			return nil, err
 		}
 	}
+
+	// Mock payment: if payment gateway was selected, create and complete a payment record.
+	if paymentGatewayID != nil && *paymentGatewayID != uuid.Nil {
+		gateway, err := s.paymentGatewayRepo.GetByID(ctx, *paymentGatewayID)
+		if err == nil && gateway != nil && gateway.PharmacyID == pharmacyID && gateway.IsActive {
+			payment := &models.Payment{
+				OrderID:          o.ID,
+				PharmacyID:       pharmacyID,
+				PaymentGatewayID: paymentGatewayID,
+				Amount:           o.TotalAmount,
+				Currency:         o.Currency,
+				Method:           gatewayCodeToPaymentMethod(gateway.Code),
+				Reference:        "mock-" + o.ID.String(),
+				CreatedBy:        createdBy,
+			}
+			if createErr := s.paymentSvc.Create(ctx, payment); createErr == nil {
+				_ = s.paymentSvc.Complete(ctx, payment.ID)
+			}
+		}
+	}
+
 	return s.orderRepo.GetByID(ctx, o.ID)
 }
 
@@ -158,7 +197,10 @@ func (s *orderService) GetByID(ctx context.Context, id uuid.UUID) (*models.Order
 	return s.orderRepo.GetByID(ctx, id)
 }
 
-func (s *orderService) List(ctx context.Context, pharmacyID uuid.UUID, status *string) ([]*models.Order, error) {
+func (s *orderService) List(ctx context.Context, pharmacyID uuid.UUID, createdBy *uuid.UUID, status *string) ([]*models.Order, error) {
+	if createdBy != nil {
+		return s.orderRepo.ListByPharmacyAndCreatedBy(ctx, pharmacyID, *createdBy, status)
+	}
 	return s.orderRepo.ListByPharmacy(ctx, pharmacyID, status)
 }
 
