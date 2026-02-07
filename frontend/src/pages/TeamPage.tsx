@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { usersApi, User } from '@/lib/api';
+import { usersApi, User, uploadFile } from '@/lib/api';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Loader from '@/components/Loader';
-import { Plus, X, Pencil, UserMinus, RefreshCw, Eye } from 'lucide-react';
+import { Plus, X, Pencil, UserMinus, RefreshCw, Eye, FileText, Image } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const ROLE_OPTIONS_ADMIN = [
@@ -28,8 +28,34 @@ export default function TeamPage() {
   const [error, setError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ email: '', password: '', name: '', role: 'pharmacist' });
-  const [editForm, setEditForm] = useState({ name: '', role: '', is_active: true });
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    name: '',
+    role: 'pharmacist',
+    license_number: '',
+    qualification: '',
+    cv_url: '',
+    photo_url: '',
+    date_of_birth: '',
+    gender: '',
+    phone: '',
+  });
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [uploadingFile, setUploadingFile] = useState<'cv' | 'photo' | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    role: '',
+    is_active: true,
+    license_number: '',
+    qualification: '',
+    cv_url: '',
+    photo_url: '',
+    date_of_birth: '',
+    gender: '',
+    phone: '',
+  });
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
@@ -63,7 +89,21 @@ export default function TeamPage() {
   }, [list, location.state, navigate]);
 
   const openAddModal = () => {
-    setForm({ email: '', password: '', name: '', role: roleOptions[0]?.value ?? 'pharmacist' });
+    setForm({
+      email: '',
+      password: '',
+      name: '',
+      role: roleOptions[0]?.value ?? 'pharmacist',
+      license_number: '',
+      qualification: '',
+      cv_url: '',
+      photo_url: '',
+      date_of_birth: '',
+      gender: '',
+      phone: '',
+    });
+    setCvFile(null);
+    setPhotoFile(null);
     setEditingUser(null);
     setSubmitError('');
     setModalOpen(true);
@@ -71,7 +111,18 @@ export default function TeamPage() {
 
   const openEditModal = (u: User) => {
     setEditingUser(u);
-    setEditForm({ name: u.name ?? '', role: u.role, is_active: u.is_active ?? true });
+    setEditForm({
+      name: u.name ?? '',
+      role: u.role,
+      is_active: u.is_active ?? true,
+      license_number: u.license_number ?? '',
+      qualification: u.qualification ?? '',
+      cv_url: u.cv_url ?? '',
+      photo_url: u.photo_url ?? '',
+      date_of_birth: u.date_of_birth ? u.date_of_birth.slice(0, 10) : '',
+      gender: u.gender ?? '',
+      phone: u.phone ?? '',
+    });
     setSubmitError('');
     setModalOpen(true);
   };
@@ -88,11 +139,32 @@ export default function TeamPage() {
     setSubmitError('');
     setSubmitting(true);
     try {
+      let cvUrl = form.cv_url;
+      let photoUrl = form.photo_url;
+      if (form.role === 'pharmacist') {
+        if (cvFile) {
+          const res = await uploadFile(cvFile);
+          cvUrl = res.url;
+        }
+        if (photoFile) {
+          const res = await uploadFile(photoFile);
+          photoUrl = res.url;
+        }
+      }
       await usersApi.create({
         email: form.email.trim(),
         password: form.password,
         name: form.name.trim() || undefined,
         role: form.role,
+        ...(form.role === 'pharmacist' && {
+          license_number: form.license_number.trim() || undefined,
+          qualification: form.qualification.trim() || undefined,
+          cv_url: cvUrl || undefined,
+          photo_url: photoUrl || undefined,
+          date_of_birth: form.date_of_birth || undefined,
+          gender: form.gender || undefined,
+          phone: form.phone.trim() || undefined,
+        }),
       });
       closeModal();
     } catch (err) {
@@ -112,6 +184,15 @@ export default function TeamPage() {
         name: editForm.name.trim() || undefined,
         role: editForm.role || undefined,
         is_active: editForm.is_active,
+        ...(editingUser.role === 'pharmacist' && {
+          license_number: editForm.license_number.trim() || undefined,
+          qualification: editForm.qualification.trim() || undefined,
+          cv_url: editForm.cv_url || undefined,
+          photo_url: editForm.photo_url || undefined,
+          date_of_birth: editForm.date_of_birth || undefined,
+          gender: editForm.gender || undefined,
+          phone: editForm.phone.trim() || undefined,
+        }),
       });
       closeModal();
     } catch (err) {
@@ -244,8 +325,8 @@ export default function TeamPage() {
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-theme-surface rounded-xl shadow-xl border border-theme-border w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto">
+          <div className="bg-theme-surface rounded-xl shadow-xl border border-theme-border w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-theme-border">
               <h2 className="text-lg font-semibold text-theme-text">
                 {editingUser ? t('edit') : t('team_add')}
@@ -302,6 +383,108 @@ export default function TeamPage() {
                     />
                     <label htmlFor="is_active" className="text-sm text-theme-text">{t('team_active')}</label>
                   </div>
+                  {editingUser.role === 'pharmacist' && (
+                    <div className="space-y-4 pt-2 border-t border-theme-border">
+                      <h3 className="text-sm font-medium text-theme-text">{t('team_pharmacist_details')}</h3>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_license_number')}</label>
+                        <input
+                          type="text"
+                          value={editForm.license_number}
+                          onChange={(e) => setEditForm((p) => ({ ...p, license_number: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_qualification')}</label>
+                        <input
+                          type="text"
+                          value={editForm.qualification}
+                          onChange={(e) => setEditForm((p) => ({ ...p, qualification: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_cv')}</label>
+                        <label className="flex items-center gap-2 px-3 py-2 border border-theme-border rounded-lg cursor-pointer hover:bg-theme-surface-hover text-sm text-theme-text">
+                          <FileText className="w-4 h-4" />
+                          <span>{t('team_upload_cv')}</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            className="sr-only"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingFile('cv');
+                              try {
+                                const res = await uploadFile(file);
+                                setEditForm((p) => ({ ...p, cv_url: res.url }));
+                              } finally {
+                                setUploadingFile(null);
+                              }
+                            }}
+                          />
+                        </label>
+                        {editForm.cv_url && <p className="text-xs text-theme-muted mt-1 truncate">{editForm.cv_url}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_photo')}</label>
+                        <label className="flex items-center gap-2 px-3 py-2 border border-theme-border rounded-lg cursor-pointer hover:bg-theme-surface-hover text-sm text-theme-text">
+                          <Image className="w-4 h-4" />
+                          <span>{t('team_upload_photo')}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingFile('photo');
+                              try {
+                                const res = await uploadFile(file);
+                                setEditForm((p) => ({ ...p, photo_url: res.url }));
+                              } finally {
+                                setUploadingFile(null);
+                              }
+                            }}
+                          />
+                        </label>
+                        {editForm.photo_url && <p className="text-xs text-theme-muted mt-1 truncate">{editForm.photo_url}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_date_of_birth')}</label>
+                        <input
+                          type="date"
+                          value={editForm.date_of_birth}
+                          onChange={(e) => setEditForm((p) => ({ ...p, date_of_birth: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_gender')}</label>
+                        <select
+                          value={editForm.gender}
+                          onChange={(e) => setEditForm((p) => ({ ...p, gender: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        >
+                          <option value="">—</option>
+                          <option value="male">{t('team_gender_male')}</option>
+                          <option value="female">{t('team_gender_female')}</option>
+                          <option value="other">{t('team_gender_other')}</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_phone')}</label>
+                        <input
+                          type="tel"
+                          value={editForm.phone}
+                          onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -347,6 +530,94 @@ export default function TeamPage() {
                       ))}
                     </select>
                   </div>
+                  {form.role === 'pharmacist' && (
+                    <div className="space-y-4 pt-2 border-t border-theme-border">
+                      <h3 className="text-sm font-medium text-theme-text">{t('team_pharmacist_details')}</h3>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_license_number')}</label>
+                        <input
+                          type="text"
+                          value={form.license_number}
+                          onChange={(e) => setForm((p) => ({ ...p, license_number: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                          placeholder="e.g. PH-12345"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_qualification')}</label>
+                        <input
+                          type="text"
+                          value={form.qualification}
+                          onChange={(e) => setForm((p) => ({ ...p, qualification: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                          placeholder="e.g. B.Pharm, M.Pharm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_cv')}</label>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="flex items-center gap-2 px-3 py-2 border border-theme-border rounded-lg cursor-pointer hover:bg-theme-surface-hover text-sm text-theme-text">
+                            <FileText className="w-4 h-4" />
+                            <span>{t('team_upload_cv')}</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                              className="sr-only"
+                              onChange={(e) => setCvFile(e.target.files?.[0] ?? null)}
+                            />
+                          </label>
+                          {cvFile && <span className="text-sm text-theme-muted">{cvFile.name}</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_photo')}</label>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="flex items-center gap-2 px-3 py-2 border border-theme-border rounded-lg cursor-pointer hover:bg-theme-surface-hover text-sm text-theme-text">
+                            <Image className="w-4 h-4" />
+                            <span>{t('team_upload_photo')}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="sr-only"
+                              onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                            />
+                          </label>
+                          {photoFile && <span className="text-sm text-theme-muted">{photoFile.name}</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_date_of_birth')}</label>
+                        <input
+                          type="date"
+                          value={form.date_of_birth}
+                          onChange={(e) => setForm((p) => ({ ...p, date_of_birth: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_gender')}</label>
+                        <select
+                          value={form.gender}
+                          onChange={(e) => setForm((p) => ({ ...p, gender: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        >
+                          <option value="">—</option>
+                          <option value="male">{t('team_gender_male')}</option>
+                          <option value="female">{t('team_gender_female')}</option>
+                          <option value="other">{t('team_gender_other')}</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text mb-1">{t('team_phone')}</label>
+                        <input
+                          type="tel"
+                          value={form.phone}
+                          onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                          className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               <div className="flex justify-end gap-2 pt-2">

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"math"
 
 	"github.com/careplus/pharmacy-backend/internal/domain/models"
 	"github.com/careplus/pharmacy-backend/internal/ports/inbound"
@@ -12,21 +13,23 @@ import (
 )
 
 type orderService struct {
-	orderRepo              outbound.OrderRepository
-	productRepo            outbound.ProductRepository
-	inventoryService       inbound.InventoryService
-	promoCodeRepo          outbound.PromoCodeRepository
-	promoCodeSvc           inbound.PromoCodeService
-	customerRepo           outbound.CustomerRepository
-	customerMembershipRepo outbound.CustomerMembershipRepository
-	referralPointsSvc      inbound.ReferralPointsService
-	paymentGatewayRepo     outbound.PaymentGatewayRepository
-	paymentSvc             inbound.PaymentService
-	logger                 *zap.Logger
+	orderRepo               outbound.OrderRepository
+	productRepo             outbound.ProductRepository
+	inventoryService        inbound.InventoryService
+	promoCodeRepo           outbound.PromoCodeRepository
+	promoCodeSvc            inbound.PromoCodeService
+	customerRepo            outbound.CustomerRepository
+	customerMembershipRepo  outbound.CustomerMembershipRepository
+	referralPointsSvc       inbound.ReferralPointsService
+	paymentGatewayRepo      outbound.PaymentGatewayRepository
+	paymentSvc              inbound.PaymentService
+	userRepo                outbound.UserRepository
+	staffPointsConfigRepo   outbound.StaffPointsConfigRepository
+	logger                  *zap.Logger
 }
 
-func NewOrderService(orderRepo outbound.OrderRepository, productRepo outbound.ProductRepository, inventoryService inbound.InventoryService, promoCodeRepo outbound.PromoCodeRepository, promoCodeSvc inbound.PromoCodeService, customerRepo outbound.CustomerRepository, customerMembershipRepo outbound.CustomerMembershipRepository, referralPointsSvc inbound.ReferralPointsService, paymentGatewayRepo outbound.PaymentGatewayRepository, paymentSvc inbound.PaymentService, logger *zap.Logger) inbound.OrderService {
-	return &orderService{orderRepo: orderRepo, productRepo: productRepo, inventoryService: inventoryService, promoCodeRepo: promoCodeRepo, promoCodeSvc: promoCodeSvc, customerRepo: customerRepo, customerMembershipRepo: customerMembershipRepo, referralPointsSvc: referralPointsSvc, paymentGatewayRepo: paymentGatewayRepo, paymentSvc: paymentSvc, logger: logger}
+func NewOrderService(orderRepo outbound.OrderRepository, productRepo outbound.ProductRepository, inventoryService inbound.InventoryService, promoCodeRepo outbound.PromoCodeRepository, promoCodeSvc inbound.PromoCodeService, customerRepo outbound.CustomerRepository, customerMembershipRepo outbound.CustomerMembershipRepository, referralPointsSvc inbound.ReferralPointsService, paymentGatewayRepo outbound.PaymentGatewayRepository, paymentSvc inbound.PaymentService, userRepo outbound.UserRepository, staffPointsConfigRepo outbound.StaffPointsConfigRepository, logger *zap.Logger) inbound.OrderService {
+	return &orderService{orderRepo: orderRepo, productRepo: productRepo, inventoryService: inventoryService, promoCodeRepo: promoCodeRepo, promoCodeSvc: promoCodeSvc, customerRepo: customerRepo, customerMembershipRepo: customerMembershipRepo, referralPointsSvc: referralPointsSvc, paymentGatewayRepo: paymentGatewayRepo, paymentSvc: paymentSvc, userRepo: userRepo, staffPointsConfigRepo: staffPointsConfigRepo, logger: logger}
 }
 
 // gatewayCodeToPaymentMethod maps payment gateway code to Payment method for recording.
@@ -240,8 +243,27 @@ func (s *orderService) UpdateStatus(ctx context.Context, orderID uuid.UUID, stat
 	if err := s.orderRepo.Update(ctx, o); err != nil {
 		return nil, errors.ErrInternal("failed to update order status", err)
 	}
-	if !wasCompleted && status == models.OrderStatusCompleted && s.referralPointsSvc != nil {
-		_ = s.referralPointsSvc.OnOrderCompleted(ctx, o)
+	if !wasCompleted && status == models.OrderStatusCompleted {
+		if s.referralPointsSvc != nil {
+			_ = s.referralPointsSvc.OnOrderCompleted(ctx, o)
+		}
+		// Credit pharmacist/staff points for completed sale (created_by user)
+		if s.staffPointsConfigRepo != nil && s.userRepo != nil {
+			cfg, _ := s.staffPointsConfigRepo.GetOrCreateByPharmacyID(ctx, o.PharmacyID)
+			if cfg != nil && cfg.CurrencyUnitForPoints > 0 && cfg.PointsPerCurrencyUnit > 0 && o.TotalAmount > 0 {
+				units := math.Floor(o.TotalAmount / cfg.CurrencyUnitForPoints)
+				points := int(units * cfg.PointsPerCurrencyUnit)
+				if points > 0 {
+					u, err := s.userRepo.GetByID(ctx, o.CreatedBy)
+					if err == nil && u != nil {
+						u.PointsBalance += points
+						if err := s.userRepo.Update(ctx, u); err != nil {
+							s.logger.Warn("failed to credit staff points", zap.Error(err), zap.String("order_id", orderID.String()), zap.String("user_id", o.CreatedBy.String()))
+						}
+					}
+				}
+			}
+		}
 	}
 	return s.orderRepo.GetByID(ctx, orderID)
 }

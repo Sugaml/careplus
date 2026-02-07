@@ -15,6 +15,9 @@ import {
   ChevronRight,
   Mail,
   Shield,
+  Eye,
+  EyeOff,
+  Award,
 } from 'lucide-react';
 
 type ProfileSection = 'account' | 'security' | 'addresses';
@@ -64,6 +67,7 @@ export default function ProfileSettingsPage() {
   const [addressSaving, setAddressSaving] = useState(false);
   const [deleteAddressId, setDeleteAddressId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [showPoints, setShowPoints] = useState(true); // eye icon: show/hide points in profile
 
   const loadAddresses = async () => {
     try {
@@ -353,6 +357,27 @@ export default function ProfileSettingsPage() {
                   <div>
                     <label className="block text-sm font-medium text-theme-text mb-1.5">{t('auth_role')}</label>
                     <p className="text-theme-text capitalize pl-6">{user.role}</p>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-theme-text mb-1">
+                      <Award className="w-4 h-4 text-careplus-primary" />
+                      {t('profile_points')}
+                    </label>
+                    <p className="text-xs text-theme-muted mb-1.5 pl-6">{t('profile_points_earned')}</p>
+                    <div className="pl-6 flex items-center gap-2">
+                      <span className="text-theme-text font-semibold tabular-nums">
+                        {showPoints ? (user.points_balance ?? 0).toLocaleString() : t('profile_points_hidden')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowPoints((prev) => !prev)}
+                        className="p-1.5 rounded-lg text-theme-muted hover:text-theme-text hover:bg-theme-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-careplus-primary/50"
+                        title={showPoints ? t('profile_hide_points') : t('profile_show_points')}
+                        aria-label={showPoints ? t('profile_hide_points') : t('profile_show_points')}
+                      >
+                        {showPoints ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-theme-text mb-1.5">{t('profile_display_name')}</label>

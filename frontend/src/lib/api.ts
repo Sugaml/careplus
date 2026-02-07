@@ -382,6 +382,156 @@ export const announcementApi = {
     api<{ message: string }>('/announcements/skip-all', { method: 'POST' }),
 };
 
+/** Blog (medical articles, findings; approval workflow). */
+export interface BlogCategory {
+  id: string;
+  pharmacy_id: string;
+  parent_id?: string | null;
+  name: string;
+  slug: string;
+  description: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlogPostMedia {
+  id: string;
+  post_id: string;
+  media_type: 'image' | 'video';
+  url: string;
+  caption: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface BlogPost {
+  id: string;
+  pharmacy_id: string;
+  category_id?: string | null;
+  author_id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  body: string;
+  status: 'draft' | 'pending_approval' | 'published';
+  published_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  author?: { id: string; name: string; email: string };
+  category?: BlogCategory | null;
+}
+
+export interface BlogPostWithMeta extends BlogPost {
+  like_count: number;
+  user_liked: boolean;
+  comment_count: number;
+  view_count: number;
+  media?: BlogPostMedia[];
+}
+
+export interface BlogPostComment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  parent_id?: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  user?: { id: string; name: string; email: string };
+}
+
+export interface BlogAnalytics {
+  post_id: string;
+  title: string;
+  slug: string;
+  view_count: number;
+  view_count_7d: number;
+  like_count: number;
+  comment_count: number;
+  published_at?: string | null;
+}
+
+export const blogApi = {
+  listCategories: (params?: { parent_id?: string | null }) => {
+    const q = params?.parent_id != null && params.parent_id !== '' ? `?parent_id=${params.parent_id}` : '';
+    return api<BlogCategory[]>(`/blog/categories${q}`);
+  },
+  createCategory: (body: { name: string; description?: string; parent_id?: string | null; sort_order?: number }) =>
+    api<BlogCategory>('/blog/categories', { method: 'POST', body: JSON.stringify(body) }),
+  getCategory: (id: string) => api<BlogCategory>(`/blog/categories/${id}`),
+  updateCategory: (id: string, body: { name?: string; description?: string; parent_id?: string | null; sort_order?: number }) =>
+    api<BlogCategory>(`/blog/categories/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteCategory: (id: string) => api<{ message: string }>(`/blog/categories/${id}`, { method: 'DELETE' }),
+  listPosts: (params?: { status?: string; category_id?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.category_id) q.set('category_id', params.category_id);
+    if (params?.limit != null) q.set('limit', String(params.limit));
+    if (params?.offset != null) q.set('offset', String(params.offset));
+    const s = q.toString();
+    return api<{ posts: BlogPostWithMeta[]; total: number }>(`/blog/posts${s ? `?${s}` : ''}`);
+  },
+  listPendingPosts: (params?: { limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.limit != null) q.set('limit', String(params.limit));
+    if (params?.offset != null) q.set('offset', String(params.offset));
+    const s = q.toString();
+    return api<{ posts: BlogPostWithMeta[]; total: number }>(`/blog/posts/pending${s ? `?${s}` : ''}`);
+  },
+  createPost: (body: {
+    title: string;
+    excerpt?: string;
+    body: string;
+    category_id?: string | null;
+    status?: 'draft' | 'pending_approval';
+    media?: { media_type: string; url: string; caption?: string; sort_order?: number }[];
+  }) => api<BlogPost>('/blog/posts', { method: 'POST', body: JSON.stringify(body) }),
+  getPost: (id: string, recordView = true) =>
+    api<BlogPostWithMeta>(`/blog/posts/${id}${recordView ? '?record_view=true' : ''}`),
+  updatePost: (id: string, body: {
+    title?: string;
+    excerpt?: string;
+    body?: string;
+    category_id?: string | null;
+    status?: 'draft' | 'pending_approval';
+    media?: { media_type: string; url: string; caption?: string; sort_order?: number }[];
+  }) => api<BlogPost>(`/blog/posts/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deletePost: (id: string) => api<{ message: string }>(`/blog/posts/${id}`, { method: 'DELETE' }),
+  approvePost: (id: string) => api<BlogPost>(`/blog/posts/${id}/approve`, { method: 'POST' }),
+  submitForApproval: (id: string) => api<BlogPost>(`/blog/posts/${id}/submit`, { method: 'POST' }),
+  likePost: (id: string) => api<{ message: string }>(`/blog/posts/${id}/like`, { method: 'POST' }),
+  unlikePost: (id: string) => api<{ message: string }>(`/blog/posts/${id}/like`, { method: 'DELETE' }),
+  listComments: (postId: string, params?: { limit?: number; offset?: number }) => {
+    const q = new URLSearchParams(params as Record<string, string>).toString();
+    return api<BlogPostComment[]>(`/blog/posts/${postId}/comments${q ? `?${q}` : ''}`);
+  },
+  createComment: (postId: string, body: string, parentId?: string) =>
+    api<BlogPostComment>(`/blog/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body, parent_id: parentId || undefined }),
+    }),
+  deleteComment: (id: string) => api<{ message: string }>(`/blog/comments/${id}`, { method: 'DELETE' }),
+  recordView: (postId: string) => api<{ message: string }>(`/blog/posts/${postId}/view`, { method: 'POST' }),
+  getPostAnalytics: (postId: string) => api<BlogAnalytics>(`/blog/posts/${postId}/analytics`),
+  getAnalytics: (limit?: number) =>
+    api<{ analytics: BlogAnalytics[] }>(`/blog/analytics${limit != null ? `?limit=${limit}` : ''}`),
+};
+
+/** Public blog (no auth) – for store blog by pharmacy. */
+export const publicBlogApi = {
+  listPosts: (pharmacyId: string, params?: { category_id?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.category_id) q.set('category_id', params.category_id);
+    if (params?.limit != null) q.set('limit', String(params.limit));
+    if (params?.offset != null) q.set('offset', String(params.offset));
+    const s = q.toString();
+    return api<{ posts: BlogPostWithMeta[]; total: number }>(`/public/pharmacies/${pharmacyId}/blog/posts${s ? `?${s}` : ''}`);
+  },
+  getPostBySlug: (pharmacyId: string, slug: string) =>
+    api<BlogPostWithMeta>(`/public/pharmacies/${pharmacyId}/blog/posts/${encodeURIComponent(slug)}`),
+};
+
 export interface Category {
   id: string;
   pharmacy_id: string;
@@ -649,20 +799,51 @@ export interface User {
   email: string;
   name: string;
   role: string;
+  points_balance?: number; // pharmacist/staff points earned from completed sales
   is_active: boolean;
   created_at: string;
+  // Pharmacist profile (optional)
+  license_number?: string;
+  qualification?: string;
+  cv_url?: string;
+  photo_url?: string;
+  date_of_birth?: string;
+  gender?: string;
+  phone?: string;
 }
+
+/** Request body for creating a user; when role is pharmacist, pharmacist fields can be included. */
+export type CreateUserBody = {
+  email: string;
+  password: string;
+  name?: string;
+  role: string;
+  license_number?: string;
+  qualification?: string;
+  cv_url?: string;
+  photo_url?: string;
+  date_of_birth?: string;
+  gender?: string;
+  phone?: string;
+};
 
 /** Staff CRUD: list/create/get/update/deactivate (admin: all roles; manager: pharmacists only). */
 export const usersApi = {
   list: () => api<User[]>('/users'),
-  create: (body: { email: string; password: string; name?: string; role: string }) =>
+  create: (body: CreateUserBody) =>
     api<User>('/users', { method: 'POST', body: JSON.stringify(body) }),
   get: (id: string) => api<User>(`/users/${id}`),
-  update: (id: string, body: { name?: string; role?: string; is_active?: boolean }) =>
+  update: (id: string, body: { name?: string; role?: string; is_active?: boolean; license_number?: string; qualification?: string; cv_url?: string; photo_url?: string; date_of_birth?: string; gender?: string; phone?: string }) =>
     api<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deactivate: (id: string) => api<User>(`/users/${id}/deactivate`, { method: 'PATCH' }),
 };
+
+/** Upload a file (staff only). Returns { url, path, filename }. Use for CV, photo, etc. */
+export function uploadFile(file: File): Promise<{ url: string; path: string; filename: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  return apiUpload<{ url: string; path: string; filename: string }>('/upload', form);
+}
 
 export type ShiftType = 'morning' | 'evening' | 'full';
 

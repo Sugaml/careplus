@@ -40,6 +40,13 @@ import DailyLogsPage from '@/pages/DailyLogsPage';
 import InventoryPage from '@/pages/InventoryPage';
 import ChatPage from '@/pages/ChatPage';
 import CustomerChatEntryPage from '@/pages/CustomerChatEntryPage';
+import BlogListPage from '@/pages/BlogListPage';
+import BlogDetailPage from '@/pages/BlogDetailPage';
+import BlogCreatePage from '@/pages/BlogCreatePage';
+import BlogEditPage from '@/pages/BlogEditPage';
+import BlogCategoriesPage from '@/pages/BlogCategoriesPage';
+import BlogPendingPage from '@/pages/BlogPendingPage';
+import BlogAnalyticsPage from '@/pages/BlogAnalyticsPage';
 import { STAFF_DASHBOARD_ROLES } from '@/lib/roles';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -101,6 +108,13 @@ function AppRoutes() {
         <Route path="statements" element={<StatementsPage />} />
         <Route path="promos" element={<PromosPage />} />
         <Route path="announcements" element={<AnnouncementsPage />} />
+        <Route path="blog" element={<BlogListPage />} />
+        <Route path="blog/create" element={<BlogCreatePage />} />
+        <Route path="blog/categories" element={<BlogCategoriesPage />} />
+        <Route path="blog/pending" element={<BlogPendingPage />} />
+        <Route path="blog/analytics" element={<BlogAnalyticsPage />} />
+        <Route path="blog/:id" element={<BlogDetailPage />} />
+        <Route path="blog/:id/edit" element={<BlogEditPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="manage/companies" element={<CompaniesPage />} />

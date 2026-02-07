@@ -360,27 +360,48 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
         <section className="catalog-hero relative overflow-hidden bg-careplus-primary">
           <div className="catalog-hero-bg absolute inset-0 pointer-events-none" aria-hidden />
           <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 relative">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-white" aria-hidden />
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white drop-shadow-sm">{t('product_catalog')}</h1>
+            <div className="flex flex-nowrap items-center gap-x-4 gap-y-2">
+              <div className="min-w-0 flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 shrink-0">
+                  <Sparkles className="w-4 h-4 shrink-0 text-white/95" aria-hidden />
+                  <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-sm whitespace-nowrap">{t('product_catalog')}</h1>
                 </div>
-                <p className="text-xs sm:text-sm max-w-xl leading-snug text-white/95">
+                <p className="text-xs sm:text-sm leading-snug text-white/90 catalog-hero-subtitle shrink-0">
                   {user
                     ? t('product_catalog_subtitle_logged_in')
                     : (
                       <>
                         {t('product_catalog_subtitle_before')}
-                        <Link to="/login" className="underline font-semibold text-white hover:text-white/95 transition-colors duration-200 decoration-2 underline-offset-2">{t('nav_login')}</Link>
+                        <Link to="/login" className="underline font-semibold text-white hover:text-white decoration-2 underline-offset-2">{t('nav_login')}</Link>
                         {t('product_catalog_subtitle_mid')}
-                        <Link to="/register" className="underline font-semibold text-white hover:text-white/95 transition-colors duration-200 decoration-2 underline-offset-2">{t('nav_register')}</Link>
+                        <Link to="/register" className="underline font-semibold text-white hover:text-white decoration-2 underline-offset-2">{t('nav_register')}</Link>
                         {t('product_catalog_subtitle_after')}
                       </>
                     )}
                 </p>
+                {pharmacies.length > 0 && selectedPharmacyId && (
+                  <div className="catalog-search-inline flex items-center gap-2 shrink-0 min-w-0">
+                    <span className="text-xs sm:text-sm font-medium text-white/95 whitespace-nowrap">{t('search_products_aria')}</span>
+                    <div className="relative flex-1 min-w-[140px] max-w-[200px] sm:max-w-[240px]">
+                      <Search className="catalog-search-icon absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted pointer-events-none" aria-hidden />
+                      <input
+                        id="catalog-search"
+                        type="search"
+                        placeholder={t('search_products')}
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        className="catalog-search-input w-full pl-7 pr-2 py-1.5 rounded-md border border-theme-input-border text-xs sm:text-sm text-theme-text placeholder:text-theme-text-muted shadow-sm focus:ring-1 focus:ring-careplus-primary/40 focus:border-careplus-primary focus:outline-none transition-colors"
+                        aria-label={t('search_products_aria')}
+                        aria-describedby="catalog-search-hint"
+                      />
+                    </div>
+                    <span id="catalog-search-hint" className="catalog-search-hint text-[11px] text-white/75 whitespace-nowrap hidden sm:inline">
+                      {t('search_products_hint')}
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-nowrap ml-auto">
                 {embedded && user && (
                   <button
                     type="button"
@@ -423,20 +444,6 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
                 </button>
               </div>
             </div>
-            {/* Search in hero – surface bg so input text is readable */}
-            {pharmacies.length > 0 && selectedPharmacyId && (
-              <div className="relative max-w-2xl">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-theme-muted pointer-events-none" aria-hidden />
-                <input
-                  type="search"
-                  placeholder={t('search_products')}
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="catalog-search-input w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-theme-input-border text-sm sm:text-base shadow-lg focus:ring-2 focus:ring-careplus-primary focus:border-careplus-primary focus:outline-none"
-                  aria-label={t('search_products_aria')}
-                />
-              </div>
-            )}
           </div>
         </section>
 

@@ -106,6 +106,8 @@ export default function AnnouncementsPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    // Select elements always give string values; coerce numeric fields
+    const numericFromSelect = name === 'display_seconds';
     setForm((prev) => ({
       ...prev,
       [name]:
@@ -113,7 +115,9 @@ export default function AnnouncementsPage() {
           ? (value === '' ? 0 : Number(value))
           : type === 'checkbox'
             ? (e.target as HTMLInputElement).checked
-            : value,
+            : numericFromSelect
+              ? Number(value)
+              : value,
     }));
   };
 
@@ -128,7 +132,7 @@ export default function AnnouncementsPage() {
         body: form.body.trim() || undefined,
         image_url: form.image_url.trim() || undefined,
         link_url: form.link_url.trim() || undefined,
-        display_seconds: form.display_seconds,
+        display_seconds: Number(form.display_seconds),
         valid_days: form.valid_days,
         show_terms: form.show_terms,
         terms_text: form.terms_text.trim() || undefined,

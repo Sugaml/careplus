@@ -255,6 +255,12 @@ type ReferralPointsConfigRepository interface {
 	Update(ctx context.Context, c *models.ReferralPointsConfig) error
 }
 
+type StaffPointsConfigRepository interface {
+	GetByPharmacyID(ctx context.Context, pharmacyID uuid.UUID) (*models.StaffPointsConfig, error)
+	GetOrCreateByPharmacyID(ctx context.Context, pharmacyID uuid.UUID) (*models.StaffPointsConfig, error)
+	Update(ctx context.Context, c *models.StaffPointsConfig) error
+}
+
 type ConversationRepository interface {
 	Create(ctx context.Context, c *models.Conversation) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Conversation, error)
@@ -295,4 +301,53 @@ type AnnouncementAckRepository interface {
 	Create(ctx context.Context, a *models.AnnouncementAck) error
 	HasAcked(ctx context.Context, userID, announcementID uuid.UUID) (bool, error)
 	HasSkippedAllSince(ctx context.Context, userID uuid.UUID, since time.Time) (bool, error)
+}
+
+// Blog
+type BlogCategoryRepository interface {
+	Create(ctx context.Context, c *models.BlogCategory) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.BlogCategory, error)
+	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, parentID *uuid.UUID) ([]*models.BlogCategory, error)
+	Update(ctx context.Context, c *models.BlogCategory) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+type BlogPostRepository interface {
+	Create(ctx context.Context, p *models.BlogPost) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.BlogPost, error)
+	GetByPharmacyAndSlug(ctx context.Context, pharmacyID uuid.UUID, slug string) (*models.BlogPost, error)
+	ListByPharmacy(ctx context.Context, pharmacyID uuid.UUID, status *string, categoryID *uuid.UUID, limit, offset int) ([]*models.BlogPost, int64, error)
+	ListPendingByPharmacy(ctx context.Context, pharmacyID uuid.UUID, limit, offset int) ([]*models.BlogPost, int64, error)
+	Update(ctx context.Context, p *models.BlogPost) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+type BlogPostMediaRepository interface {
+	Create(ctx context.Context, m *models.BlogPostMedia) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.BlogPostMedia, error)
+	ListByPostID(ctx context.Context, postID uuid.UUID) ([]*models.BlogPostMedia, error)
+	Update(ctx context.Context, m *models.BlogPostMedia) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	DeleteByPostID(ctx context.Context, postID uuid.UUID) error
+}
+
+type BlogPostLikeRepository interface {
+	Create(ctx context.Context, l *models.BlogPostLike) error
+	DeleteByPostAndUser(ctx context.Context, postID, userID uuid.UUID) error
+	CountByPostID(ctx context.Context, postID uuid.UUID) (int64, error)
+	Exists(ctx context.Context, postID, userID uuid.UUID) (bool, error)
+}
+
+type BlogPostCommentRepository interface {
+	Create(ctx context.Context, c *models.BlogPostComment) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.BlogPostComment, error)
+	ListByPostID(ctx context.Context, postID uuid.UUID, limit, offset int) ([]*models.BlogPostComment, error)
+	CountByPostID(ctx context.Context, postID uuid.UUID) (int64, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+type BlogPostViewRepository interface {
+	Create(ctx context.Context, v *models.BlogPostView) error
+	CountByPostID(ctx context.Context, postID uuid.UUID) (int64, error)
+	CountByPostIDSince(ctx context.Context, postID uuid.UUID, since time.Time) (int64, error)
 }

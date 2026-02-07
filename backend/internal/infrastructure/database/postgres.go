@@ -56,6 +56,7 @@ func NewPostgresConnection(cfg *config.Config, log *zap.Logger) (*gorm.DB, func(
 		&models.Customer{},
 		&models.CustomerMembership{},
 		&models.ReferralPointsConfig{},
+		&models.StaffPointsConfig{},
 		&models.PointsTransaction{},
 		&models.Order{},
 		&models.OrderItem{},
@@ -73,6 +74,12 @@ func NewPostgresConnection(cfg *config.Config, log *zap.Logger) (*gorm.DB, func(
 		&models.UserAddress{},
 		&models.Announcement{},
 		&models.AnnouncementAck{},
+		&models.BlogCategory{},
+		&models.BlogPost{},
+		&models.BlogPostMedia{},
+		&models.BlogPostLike{},
+		&models.BlogPostComment{},
+		&models.BlogPostView{},
 	); err != nil {
 		return nil, nil, fmt.Errorf("auto migrate failed: %w", err)
 	}

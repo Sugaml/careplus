@@ -156,12 +156,20 @@ body {
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255,255,255,0.2) 0%, transparent 50%),
     radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255,255,255,0.1) 0%, transparent 40%);
 }
-.catalog-hero .catalog-search-input {
+/* Hero typography */
+.catalog-hero-text .catalog-hero-subtitle {
+  letter-spacing: 0.01em;
+}
+/* Search box on hero – inline one line */
+.catalog-hero .catalog-search-inline .catalog-search-input {
   color: var(--theme-text);
   background: var(--theme-surface);
 }
-.catalog-hero .catalog-search-input::placeholder {
+.catalog-hero .catalog-search-inline .catalog-search-input::placeholder {
   color: var(--theme-text-muted);
+}
+.catalog-hero .catalog-search-hint {
+  letter-spacing: 0.01em;
 }
 .catalog-product-card:focus-within {
   box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);

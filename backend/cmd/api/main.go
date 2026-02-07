@@ -70,6 +70,7 @@ func main() {
 	promoCodeRepo := persistence.NewPromoCodeRepository(db)
 	pointsTransactionRepo := persistence.NewPointsTransactionRepository(db)
 	referralPointsConfigRepo := persistence.NewReferralPointsConfigRepository(db)
+	staffPointsConfigRepo := persistence.NewStaffPointsConfigRepository(db)
 	customerRepo := persistence.NewCustomerRepository(db)
 	customerMembershipRepo := persistence.NewCustomerMembershipRepository(db)
 	activityLogRepo := persistence.NewActivityLogRepository(db)
@@ -82,6 +83,12 @@ func main() {
 	userAddressRepo := persistence.NewUserAddressRepository(db)
 	announcementRepo := persistence.NewAnnouncementRepository(db)
 	announcementAckRepo := persistence.NewAnnouncementAckRepository(db)
+	blogCategoryRepo := persistence.NewBlogCategoryRepository(db)
+	blogPostRepo := persistence.NewBlogPostRepository(db)
+	blogPostMediaRepo := persistence.NewBlogPostMediaRepository(db)
+	blogPostLikeRepo := persistence.NewBlogPostLikeRepository(db)
+	blogPostCommentRepo := persistence.NewBlogPostCommentRepository(db)
+	blogPostViewRepo := persistence.NewBlogPostViewRepository(db)
 
 	authService := services.NewAuthService(userRepo, pharmacyRepo, authProviderInterface, zapLogger)
 	userAddressService := services.NewUserAddressService(userAddressRepo, zapLogger)
@@ -100,7 +107,7 @@ func main() {
 	var referralPointsServiceInterface inbound.ReferralPointsService = referralPointsService
 	paymentService := services.NewPaymentService(paymentRepo, zapLogger)
 	paymentGatewayService := services.NewPaymentGatewayService(paymentGatewayRepo, zapLogger)
-	orderService := services.NewOrderService(orderRepo, productRepo, inventoryService, promoCodeRepo, promoCodeService, customerRepo, customerMembershipRepo, referralPointsServiceInterface, paymentGatewayRepo, paymentService, zapLogger)
+	orderService := services.NewOrderService(orderRepo, productRepo, inventoryService, promoCodeRepo, promoCodeService, customerRepo, customerMembershipRepo, referralPointsServiceInterface, paymentGatewayRepo, paymentService, userRepo, staffPointsConfigRepo, zapLogger)
 	invoiceService := services.NewInvoiceService(invoiceRepo, orderRepo, paymentRepo, zapLogger)
 	activityLogService := services.NewActivityLogService(activityLogRepo, zapLogger)
 	notificationService := services.NewNotificationService(notificationRepo, zapLogger)
@@ -109,6 +116,7 @@ func main() {
 	dutyRosterService := services.NewDutyRosterService(dutyRosterRepo, userRepo, zapLogger)
 	dailyLogService := services.NewDailyLogService(dailyLogRepo, zapLogger)
 	chatService := services.NewChatService(conversationRepo, chatMessageRepo, configRepo, customerRepo, zapLogger)
+	blogService := services.NewBlogService(blogPostRepo, blogCategoryRepo, blogPostMediaRepo, blogPostLikeRepo, blogPostCommentRepo, blogPostViewRepo, zapLogger)
 
 	var authServiceInterface inbound.AuthService = authService
 	var pharmacyServiceInterface inbound.PharmacyService = pharmacyService
@@ -164,11 +172,12 @@ func main() {
 	var announcementServiceInterface inbound.AnnouncementService = announcementService
 	announcementHandler := handlers.NewAnnouncementHandler(announcementServiceInterface, zapLogger)
 	referralHandler := handlers.NewReferralHandler(referralPointsServiceInterface, zapLogger)
+	blogHandler := handlers.NewBlogHandler(blogService, zapLogger)
 	chatHandler := handlers.NewChatHandler(chatService, authProviderInterface, zapLogger)
 	chatHub := ws.NewHub(zapLogger)
 	chatWSHandler := ws.HandleWS(authProviderInterface, userRepo, chatService, conversationRepo, chatHub, zapLogger)
 
-	router := http.NewRouter(cfg, authHandler, addressHandler, pharmacyHandler, productHandler, categoryHandler, productUnitHandler, membershipHandler, reviewHandler, orderHandler, promoCodeHandler, paymentHandler, paymentGatewayHandler, inventoryHandler, invoiceHandler, configHandler, usersHandler, uploadHandler, activityHandler, notificationHandler, promoHandler, announcementHandler, referralHandler, healthHandler, dutyRosterHandler, dailyLogHandler, dashboardHandler, chatHandler, chatWSHandler, authProviderInterface, userRepo, activityLogServiceInterface, zapLogger)
+	router := http.NewRouter(cfg, authHandler, addressHandler, pharmacyHandler, productHandler, categoryHandler, productUnitHandler, membershipHandler, reviewHandler, orderHandler, promoCodeHandler, paymentHandler, paymentGatewayHandler, inventoryHandler, invoiceHandler, configHandler, usersHandler, uploadHandler, activityHandler, notificationHandler, promoHandler, announcementHandler, referralHandler, healthHandler, dutyRosterHandler, dailyLogHandler, dashboardHandler, blogHandler, chatHandler, chatWSHandler, authProviderInterface, userRepo, activityLogServiceInterface, zapLogger)
 	server := http.NewServer(router, cfg, zapLogger)
 
 	go func() {

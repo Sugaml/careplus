@@ -35,6 +35,7 @@ import {
   ListOrdered,
   MessageCircle,
   Tag,
+  BookOpen,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -47,7 +48,7 @@ type NavItem = {
   featureKey?: string;
 };
 
-type NavGroupChild = { to: string; labelKey: string; featureKey?: string };
+type NavGroupChild = { to: string; labelKey: string; featureKey?: string; roles?: string[] };
 
 type NavGroup = {
   labelKey: string;
@@ -89,6 +90,18 @@ const NAV_ENTRIES: NavEntry[] = [
   { to: '/billing', labelKey: 'nav_billing', icon: Receipt, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'billing' },
   { to: '/promo-codes', labelKey: 'nav_promo_codes', icon: Tag, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'promos' },
   { to: '/announcements', labelKey: 'nav_announcements', icon: Megaphone, roles: ['admin', 'manager', 'pharmacist'], featureKey: 'announcements' },
+  {
+    labelKey: 'nav_blog',
+    icon: BookOpen,
+    roles: ['admin', 'manager', 'pharmacist'],
+    children: [
+      { to: '/blog', labelKey: 'nav_blog_posts' },
+      { to: '/blog/categories', labelKey: 'nav_blog_categories' },
+      { to: '/blog/create', labelKey: 'nav_blog_write' },
+      { to: '/blog/pending', labelKey: 'nav_blog_pending', roles: ['admin', 'manager'] },
+      { to: '/blog/analytics', labelKey: 'nav_blog_analytics' },
+    ],
+  },
   { to: '/invoices', labelKey: 'nav_invoices', icon: FileText },
   { to: '/payments', labelKey: 'nav_payments', icon: CreditCard },
   { to: '/statements', labelKey: 'nav_statements', icon: ListOrdered, featureKey: 'statements' },
@@ -102,6 +115,7 @@ const NAV_ENTRIES: NavEntry[] = [
 const NAV_ENTRIES_BUYER: NavItem[] = [
   { to: '/dashboard', labelKey: 'nav_dashboard', icon: LayoutDashboard },
   { to: '/catalog', labelKey: 'nav_catalog', icon: Package, featureKey: 'products' },
+  { to: '/blog', labelKey: 'nav_blog', icon: BookOpen },
   { to: '/orders', labelKey: 'nav_orders', icon: ShoppingCart, featureKey: 'orders' },
   { to: '/chat', labelKey: 'nav_chat', icon: MessageCircle, featureKey: 'chat' },
   { to: '/profile', labelKey: 'nav_profile_settings', icon: User },
@@ -241,7 +255,9 @@ export default function Layout() {
         <nav className="flex-1 overflow-y-auto py-3 px-2">
           {getVisibleNavEntries(user?.role, features).map((entry, idx) => {
             if (isNavGroup(entry)) {
-              const visibleChildren = entry.children.filter((c) => isFeatureEnabled(features, c.featureKey));
+              const visibleChildren = entry.children.filter(
+                (c) => isFeatureEnabled(features, c.featureKey) && (!c.roles || (user?.role && c.roles.includes(user.role)))
+              );
               if (visibleChildren.length === 0) return null;
               const Icon = entry.icon;
               const pathname = location.pathname;

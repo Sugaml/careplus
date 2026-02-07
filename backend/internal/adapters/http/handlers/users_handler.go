@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/careplus/pharmacy-backend/internal/adapters/http/dto/response"
 	"github.com/careplus/pharmacy-backend/internal/ports/inbound"
@@ -45,6 +46,14 @@ type createUserRequest struct {
 	Password string `json:"password" binding:"required,min=6"`
 	Name     string `json:"name"`
 	Role     string `json:"role"` // manager, pharmacist, staff (admin only: manager; manager only: pharmacist)
+	// Pharmacist-only (optional when role is pharmacist)
+	LicenseNumber string `json:"license_number"`
+	Qualification  string `json:"qualification"`
+	CVURL         string `json:"cv_url"`
+	PhotoURL      string `json:"photo_url"`
+	DateOfBirth   string `json:"date_of_birth"` // ISO date YYYY-MM-DD
+	Gender        string `json:"gender"`
+	Phone         string `json:"phone"`
 }
 
 func (h *UsersHandler) Create(c *gin.Context) {
@@ -60,7 +69,34 @@ func (h *UsersHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.BindValidationError(errors.ErrCodeValidation, "Invalid input", err))
 		return
 	}
-	user, err := h.userService.Create(c.Request.Context(), pharmacyID, role.(string), req.Email, req.Password, req.Name, req.Role)
+	var pharmacist *inbound.PharmacistProfileInput
+	if req.Role == "pharmacist" {
+		pharmacist = &inbound.PharmacistProfileInput{}
+		if req.LicenseNumber != "" {
+			pharmacist.LicenseNumber = &req.LicenseNumber
+		}
+		if req.Qualification != "" {
+			pharmacist.Qualification = &req.Qualification
+		}
+		if req.CVURL != "" {
+			pharmacist.CVURL = &req.CVURL
+		}
+		if req.PhotoURL != "" {
+			pharmacist.PhotoURL = &req.PhotoURL
+		}
+		if req.DateOfBirth != "" {
+			if t, err := time.Parse("2006-01-02", req.DateOfBirth); err == nil {
+				pharmacist.DateOfBirth = &t
+			}
+		}
+		if req.Gender != "" {
+			pharmacist.Gender = &req.Gender
+		}
+		if req.Phone != "" {
+			pharmacist.Phone = &req.Phone
+		}
+	}
+	user, err := h.userService.Create(c.Request.Context(), pharmacyID, role.(string), req.Email, req.Password, req.Name, req.Role, pharmacist)
 	if err != nil {
 		if errors.IsAppError(err) {
 			appErr := errors.GetAppError(err)
@@ -120,6 +156,14 @@ type updateUserRequest struct {
 	Name     string `json:"name"`
 	Role     string `json:"role"`
 	IsActive *bool  `json:"is_active"`
+	// Pharmacist profile (optional when user is pharmacist)
+	LicenseNumber *string `json:"license_number"`
+	Qualification  *string `json:"qualification"`
+	CVURL         *string `json:"cv_url"`
+	PhotoURL      *string `json:"photo_url"`
+	DateOfBirth   *string `json:"date_of_birth"` // ISO date YYYY-MM-DD
+	Gender        *string `json:"gender"`
+	Phone         *string `json:"phone"`
 }
 
 func (h *UsersHandler) Update(c *gin.Context) {
@@ -144,7 +188,23 @@ func (h *UsersHandler) Update(c *gin.Context) {
 	if req.Role != "" {
 		rolePtr = &req.Role
 	}
-	user, err := h.userService.Update(c.Request.Context(), pharmacyID, role.(string), userID, req.Name, rolePtr, req.IsActive)
+	var pharmacist *inbound.PharmacistProfileInput
+	if req.LicenseNumber != nil || req.Qualification != nil || req.CVURL != nil || req.PhotoURL != nil || req.DateOfBirth != nil || req.Gender != nil || req.Phone != nil {
+		pharmacist = &inbound.PharmacistProfileInput{
+			LicenseNumber: req.LicenseNumber,
+			Qualification: req.Qualification,
+			CVURL:         req.CVURL,
+			PhotoURL:      req.PhotoURL,
+			Gender:        req.Gender,
+			Phone:         req.Phone,
+		}
+		if req.DateOfBirth != nil && *req.DateOfBirth != "" {
+			if t, err := time.Parse("2006-01-02", *req.DateOfBirth); err == nil {
+				pharmacist.DateOfBirth = &t
+			}
+		}
+	}
+	user, err := h.userService.Update(c.Request.Context(), pharmacyID, role.(string), userID, req.Name, rolePtr, req.IsActive, pharmacist)
 	if err != nil {
 		if errors.IsAppError(err) {
 			appErr := errors.GetAppError(err)

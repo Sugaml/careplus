@@ -38,6 +38,7 @@ func NewRouter(
 	dutyRosterHandler *handlers.DutyRosterHandler,
 	dailyLogHandler *handlers.DailyLogHandler,
 	dashboardHandler *handlers.DashboardHandler,
+	blogHandler *handlers.BlogHandler,
 	chatHandler *handlers.ChatHandler,
 	chatWSHandler gin.HandlerFunc,
 	authProvider outbound.AuthProvider,
@@ -80,6 +81,8 @@ func NewRouter(
 			public.GET("/pharmacies/:pharmacyId/payment-gateways", paymentGatewayHandler.ListActiveByPharmacyID)
 			public.GET("/products/:id", productHandler.GetByID)
 			public.GET("/products/:id/reviews", reviewHandler.ListByProductID)
+			public.GET("/pharmacies/:pharmacyId/blog/posts", blogHandler.ListPostsPublic)
+			public.GET("/pharmacies/:pharmacyId/blog/posts/:slug", blogHandler.GetPostBySlugPublic)
 		}
 
 		auth := v1.Group("/auth")
@@ -149,6 +152,38 @@ func NewRouter(
 				reviews.POST("/:id/comments", reviewHandler.CreateComment)
 			}
 			api.DELETE("/comments/:id", reviewHandler.DeleteComment)
+
+			// Blog: list (published by default), get, like, comment, analytics — any auth; create/update/delete — staff; approve/pending — manager
+			blog := api.Group("/blog")
+			{
+				blog.GET("/categories", blogHandler.ListCategories)
+				blog.GET("/posts", blogHandler.ListPosts)
+				blog.GET("/posts/pending", middleware.RequireAdminOrManager(), blogHandler.ListPendingPosts)
+				blog.GET("/posts/:id", blogHandler.GetPost)
+				blog.POST("/posts/:id/submit", blogHandler.SubmitForApproval)
+				blog.POST("/posts/:id/like", blogHandler.LikePost)
+				blog.DELETE("/posts/:id/like", blogHandler.UnlikePost)
+				blog.GET("/posts/:id/comments", blogHandler.ListComments)
+				blog.POST("/posts/:id/comments", blogHandler.CreateComment)
+				blog.POST("/posts/:id/view", blogHandler.RecordView)
+				blog.GET("/posts/:id/analytics", blogHandler.GetPostAnalytics)
+				blog.GET("/analytics", blogHandler.GetAnalytics)
+			}
+			api.DELETE("/blog/comments/:id", blogHandler.DeleteComment)
+			blogStaff := api.Group("/blog").Use(middleware.RequireStaffRole())
+			{
+				blogStaff.POST("/categories", blogHandler.CreateCategory)
+				blogStaff.GET("/categories/:id", blogHandler.GetCategory)
+				blogStaff.PUT("/categories/:id", blogHandler.UpdateCategory)
+				blogStaff.DELETE("/categories/:id", blogHandler.DeleteCategory)
+				blogStaff.POST("/posts", blogHandler.CreatePost)
+				blogStaff.PUT("/posts/:id", blogHandler.UpdatePost)
+				blogStaff.DELETE("/posts/:id", blogHandler.DeletePost)
+			}
+			blogManager := api.Group("/blog").Use(middleware.RequireAdminOrManager())
+			{
+				blogManager.POST("/posts/:id/approve", blogHandler.ApprovePost)
+			}
 
 			// Admin-only: pharmacy create/update, config write, notifications create, promos, referral config, activity, payment gateways write
 			admin := api.Group("").Use(middleware.RequireAdmin())

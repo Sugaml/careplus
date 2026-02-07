@@ -26,14 +26,25 @@ type UserAddressService interface {
 	SetDefault(ctx context.Context, userID uuid.UUID, id uuid.UUID) (*models.UserAddress, error)
 }
 
+// PharmacistProfileInput is optional profile data when creating or updating a pharmacist.
+type PharmacistProfileInput struct {
+	LicenseNumber *string
+	Qualification *string
+	CVURL         *string
+	PhotoURL      *string
+	DateOfBirth   *time.Time
+	Gender        *string
+	Phone         *string
+}
+
 // UserService is for admin/manager to manage staff (create/update/deactivate). List/Get enforce role scope.
 type UserService interface {
 	// List returns users for the pharmacy; if actorRole is manager, only pharmacists are returned.
 	List(ctx context.Context, pharmacyID uuid.UUID, actorRole string) ([]*models.User, error)
-	// Create creates a user; admin can set role manager|pharmacist|staff, manager can only pharmacist.
-	Create(ctx context.Context, pharmacyID uuid.UUID, actorRole string, email, password, name, role string) (*models.User, error)
+	// Create creates a user; admin can set role manager|pharmacist|staff, manager can only pharmacist. Pharmacist profile optional when role is pharmacist.
+	Create(ctx context.Context, pharmacyID uuid.UUID, actorRole string, email, password, name, role string, pharmacist *PharmacistProfileInput) (*models.User, error)
 	GetByID(ctx context.Context, pharmacyID uuid.UUID, actorRole string, userID uuid.UUID) (*models.User, error)
-	Update(ctx context.Context, pharmacyID uuid.UUID, actorRole string, userID uuid.UUID, name string, role *string, isActive *bool) (*models.User, error)
+	Update(ctx context.Context, pharmacyID uuid.UUID, actorRole string, userID uuid.UUID, name string, role *string, isActive *bool, pharmacist *PharmacistProfileInput) (*models.User, error)
 	// Deactivate sets user IsActive to false (soft disable).
 	Deactivate(ctx context.Context, pharmacyID uuid.UUID, actorRole string, userID uuid.UUID) (*models.User, error)
 }
@@ -331,4 +342,65 @@ type ChatService interface {
 	DeleteMessage(ctx context.Context, conversationID, messageID, pharmacyID uuid.UUID, customerID *uuid.UUID, userID *uuid.UUID, role string) error
 	DeleteConversation(ctx context.Context, conversationID, pharmacyID uuid.UUID, customerID *uuid.UUID, userID *uuid.UUID, role string) error
 	GetChatEditWindowMinutes(ctx context.Context, pharmacyID uuid.UUID) int
+}
+
+// BlogPostWithMeta is a blog post with like count, user_liked, comment count, view count, and media.
+type BlogPostWithMeta struct {
+	*models.BlogPost
+	LikeCount    int64                 `json:"like_count"`
+	UserLiked    bool                  `json:"user_liked"`
+	CommentCount int64                 `json:"comment_count"`
+	ViewCount    int64                 `json:"view_count"`
+	Media        []*models.BlogPostMedia `json:"media,omitempty"`
+}
+
+// BlogAnalytics holds views, likes, comments for a post or aggregate.
+type BlogAnalytics struct {
+	PostID       uuid.UUID `json:"post_id"`
+	Title        string    `json:"title"`
+	Slug         string    `json:"slug"`
+	ViewCount    int64     `json:"view_count"`
+	ViewCount7d  int64     `json:"view_count_7d"`
+	LikeCount    int64     `json:"like_count"`
+	CommentCount int64     `json:"comment_count"`
+	PublishedAt  *string   `json:"published_at,omitempty"`
+}
+
+type BlogService interface {
+	// Categories
+	CreateCategory(ctx context.Context, pharmacyID uuid.UUID, name, description string, parentID *uuid.UUID, sortOrder int) (*models.BlogCategory, error)
+	GetCategory(ctx context.Context, id uuid.UUID) (*models.BlogCategory, error)
+	ListCategories(ctx context.Context, pharmacyID uuid.UUID, parentID *uuid.UUID) ([]*models.BlogCategory, error)
+	UpdateCategory(ctx context.Context, pharmacyID, id uuid.UUID, name, description *string, parentID *uuid.UUID, sortOrder *int) (*models.BlogCategory, error)
+	DeleteCategory(ctx context.Context, pharmacyID, id uuid.UUID) error
+
+	// Posts: author/company/pharmacist creates with status draft or pending_approval; manager approves to published
+	CreatePost(ctx context.Context, pharmacyID, authorID uuid.UUID, title, excerpt, body string, categoryID *uuid.UUID, status string, media []BlogPostMediaInput) (*models.BlogPost, error)
+	GetPost(ctx context.Context, postID uuid.UUID, userID *uuid.UUID, recordView bool) (*BlogPostWithMeta, error)
+	GetPostBySlug(ctx context.Context, pharmacyID uuid.UUID, slug string, userID *uuid.UUID, recordView bool) (*BlogPostWithMeta, error)
+	ListPosts(ctx context.Context, pharmacyID uuid.UUID, status *string, categoryID *uuid.UUID, limit, offset int) ([]*BlogPostWithMeta, int64, error)
+	ListPendingPosts(ctx context.Context, pharmacyID uuid.UUID, limit, offset int) ([]*BlogPostWithMeta, int64, error)
+	UpdatePost(ctx context.Context, pharmacyID, userID, postID uuid.UUID, title, excerpt, body *string, categoryID *uuid.UUID, status *string, media []BlogPostMediaInput) (*models.BlogPost, error)
+	DeletePost(ctx context.Context, pharmacyID, userID, postID uuid.UUID) error
+	ApprovePost(ctx context.Context, pharmacyID, postID uuid.UUID) (*models.BlogPost, error)
+	SubmitForApproval(ctx context.Context, pharmacyID, userID, postID uuid.UUID) (*models.BlogPost, error)
+
+	// Engagement
+	LikePost(ctx context.Context, postID, userID uuid.UUID) error
+	UnlikePost(ctx context.Context, postID, userID uuid.UUID) error
+	ListComments(ctx context.Context, postID uuid.UUID, limit, offset int) ([]*models.BlogPostComment, error)
+	CreateComment(ctx context.Context, postID, userID uuid.UUID, body string, parentID *uuid.UUID) (*models.BlogPostComment, error)
+	DeleteComment(ctx context.Context, commentID, userID uuid.UUID) error
+	RecordView(ctx context.Context, postID uuid.UUID, userID *uuid.UUID) error
+
+	// Analytics
+	GetPostAnalytics(ctx context.Context, pharmacyID, postID uuid.UUID) (*BlogAnalytics, error)
+	GetAnalytics(ctx context.Context, pharmacyID uuid.UUID, limit int) ([]*BlogAnalytics, error)
+}
+
+type BlogPostMediaInput struct {
+	MediaType string `json:"media_type"`
+	URL       string `json:"url"`
+	Caption   string `json:"caption"`
+	SortOrder int    `json:"sort_order"`
 }
