@@ -176,48 +176,52 @@ export default function OrdersPage() {
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
       )}
-      <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800/50 rounded-xl shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
         {orders.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
+          <div className="p-12 text-center text-gray-500 dark:text-gray-400">
             <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
             <p>No orders {statusFilter ? 'with this status' : 'yet'}.</p>
           </div>
         ) : (
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Order #</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Customer</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Status</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-gray-700">Total</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700">Date</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">Order #</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">Customer</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">Status</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">Total</th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">Date</th>
                 {canManageOrders && (
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-700">Actions</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">Actions</th>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {orders.map((o) => {
                 const next = nextStatuses(o.status);
                 const isActing = actingId === o.id;
                 const isDropdownOpen = openDropdown === o.id;
                 return (
-                  <tr key={o.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{o.order_number}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                  <tr
+                    key={o.id}
+                    onClick={() => navigate(`/orders/${o.id}`)}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{o.order_number}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
                       {o.customer_name || o.customer_email || '—'}
                     </td>
                     <td className="px-4 py-3">
                       <span className={statusBadgeClass(o.status)}>{o.status}</span>
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-800">
+                    <td className="px-4 py-3 text-right text-gray-800 dark:text-gray-200">
                       {o.currency} {o.total_amount.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
                       {new Date(o.created_at).toLocaleDateString()}
                     </td>
                     {canManageOrders && (
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2 flex-wrap">
                           <button
                             type="button"

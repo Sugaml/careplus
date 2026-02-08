@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/careplus/pharmacy-backend/internal/domain/models"
 	"github.com/careplus/pharmacy-backend/internal/ports/inbound"
@@ -243,6 +244,10 @@ func (s *orderService) UpdateStatus(ctx context.Context, orderID uuid.UUID, stat
 	}
 	wasCompleted := o.Status == models.OrderStatusCompleted
 	o.Status = status
+	if !wasCompleted && status == models.OrderStatusCompleted {
+		now := time.Now()
+		o.CompletedAt = &now
+	}
 	if err := s.orderRepo.Update(ctx, o); err != nil {
 		return nil, errors.ErrInternal("failed to update order status", err)
 	}

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"github.com/careplus/pharmacy-backend/internal/domain/models"
 	"github.com/careplus/pharmacy-backend/internal/ports/inbound"
@@ -11,13 +12,16 @@ import (
 	"go.uber.org/zap"
 )
 
+const reviewWindowDays = 7
+
 type reviewService struct {
-	reviewRepo outbound.ProductReviewRepository
-	likeRepo   outbound.ReviewLikeRepository
+	reviewRepo  outbound.ProductReviewRepository
+	likeRepo    outbound.ReviewLikeRepository
 	commentRepo outbound.ReviewCommentRepository
 	productRepo outbound.ProductRepository
-	userRepo   outbound.UserRepository
-	logger     *zap.Logger
+	orderRepo   outbound.OrderRepository
+	userRepo    outbound.UserRepository
+	logger      *zap.Logger
 }
 
 func NewReviewService(
@@ -25,6 +29,7 @@ func NewReviewService(
 	likeRepo outbound.ReviewLikeRepository,
 	commentRepo outbound.ReviewCommentRepository,
 	productRepo outbound.ProductRepository,
+	orderRepo outbound.OrderRepository,
 	userRepo outbound.UserRepository,
 	logger *zap.Logger,
 ) inbound.ReviewService {
@@ -33,6 +38,7 @@ func NewReviewService(
 		likeRepo:    likeRepo,
 		commentRepo: commentRepo,
 		productRepo: productRepo,
+		orderRepo:   orderRepo,
 		userRepo:    userRepo,
 		logger:      logger,
 	}
@@ -42,9 +48,21 @@ func (s *reviewService) Create(ctx context.Context, userID uuid.UUID, productID 
 	if rating < 1 || rating > 5 {
 		return nil, errors.ErrValidation("rating must be 1-5")
 	}
-	_, err := s.productRepo.GetByID(ctx, productID)
-	if err != nil {
+	prod, err := s.productRepo.GetByID(ctx, productID)
+	if err != nil || prod == nil {
 		return nil, errors.ErrNotFound("product")
+	}
+	// Reviews only allowed within 7 days of order completion (end users who purchased the product).
+	order, err := s.orderRepo.GetLatestCompletedOrderWithProduct(ctx, prod.PharmacyID, userID, productID)
+	if err != nil || order == nil {
+		return nil, errors.ErrValidation("you can only review products you purchased; complete an order first, then submit a review within 7 days of delivery")
+	}
+	completedAt := order.CompletedAt
+	if completedAt == nil {
+		completedAt = &order.UpdatedAt
+	}
+	if time.Since(*completedAt) > reviewWindowDays*24*time.Hour {
+		return nil, errors.ErrValidation("reviews are only allowed within 7 days after order completion")
 	}
 	exists, err := s.reviewRepo.ExistsByProductAndUser(ctx, productID, userID)
 	if err != nil {

@@ -60,6 +60,8 @@ func NewPostgresConnection(cfg *config.Config, log *zap.Logger) (*gorm.DB, func(
 		&models.PointsTransaction{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.OrderFeedback{},
+		&models.OrderReturnRequest{},
 		&models.Payment{},
 		&models.PaymentGateway{},
 		&models.Invoice{},

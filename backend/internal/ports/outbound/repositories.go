@@ -97,6 +97,18 @@ type OrderRepository interface {
 	CountByCustomerIDAndStatus(ctx context.Context, customerID uuid.UUID, status string) (int64, error)
 	// CountByCreatedByAndPharmacy returns the number of orders placed by this user at this pharmacy (for first-order-only promo).
 	CountByCreatedByAndPharmacy(ctx context.Context, createdBy, pharmacyID uuid.UUID) (int64, error)
+	// GetLatestCompletedOrderWithProduct returns the most recent completed order by this user at this pharmacy that contains the given product (for 7-day review window).
+	GetLatestCompletedOrderWithProduct(ctx context.Context, pharmacyID, userID, productID uuid.UUID) (*models.Order, error)
+}
+
+type OrderFeedbackRepository interface {
+	Create(ctx context.Context, f *models.OrderFeedback) error
+	GetByOrderID(ctx context.Context, orderID uuid.UUID) (*models.OrderFeedback, error)
+}
+
+type OrderReturnRequestRepository interface {
+	Create(ctx context.Context, r *models.OrderReturnRequest) error
+	GetByOrderID(ctx context.Context, orderID uuid.UUID) (*models.OrderReturnRequest, error)
 }
 
 type PaymentRepository interface {

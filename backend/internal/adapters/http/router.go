@@ -131,6 +131,10 @@ func NewRouter(
 			{
 				orders.POST("", orderHandler.Create)
 				orders.GET("", orderHandler.List)
+				orders.GET("/:orderId/feedback", orderHandler.GetFeedback)
+				orders.POST("/:orderId/feedback", orderHandler.CreateFeedback)
+				orders.GET("/:orderId/return-request", orderHandler.GetReturnRequest)
+				orders.POST("/:orderId/return-request", orderHandler.CreateReturnRequest)
 				orders.GET("/:orderId", orderHandler.GetByID)
 				orders.GET("/:orderId/payments", paymentHandler.ListByOrder)
 			}

@@ -38,9 +38,10 @@ type Order struct {
 	Notes             string         `gorm:"type:text" json:"notes"`
 	DeliveryAddress   string         `gorm:"type:text" json:"delivery_address,omitempty"` // snapshot of selected user address at order time
 	CreatedBy         uuid.UUID      `gorm:"type:uuid;index" json:"created_by"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	CompletedAt      *time.Time     `json:"completed_at,omitempty"` // set when status becomes completed (for 7-day review / 3-day return windows)
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Pharmacy   *Pharmacy   `gorm:"foreignKey:PharmacyID" json:"pharmacy,omitempty"`
 	PromoCode  *PromoCode  `gorm:"foreignKey:PromoCodeID" json:"promo_code,omitempty"`

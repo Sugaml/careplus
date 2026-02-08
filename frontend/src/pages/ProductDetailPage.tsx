@@ -712,7 +712,8 @@ export default function ProductDetailPage() {
 
           {user && (
             <form onSubmit={handleSubmitReview} className="mb-8 p-4 rounded-lg bg-gray-50 border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Write a review</h3>
+              <h3 className="text-sm font-medium text-gray-700 mb-1">Write a review</h3>
+              <p className="text-xs text-gray-500 mb-3">You can review within 7 days of order completion.</p>
               {reviewError && <p className="text-red-600 text-sm mb-2">{reviewError}</p>}
               <div className="flex gap-2 mb-3">
                 <label className="text-sm text-gray-600">Rating:</label>

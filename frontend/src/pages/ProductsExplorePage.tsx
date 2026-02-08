@@ -93,6 +93,7 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [checkoutStep, setCheckoutStep] = useState<1 | 2 | 3 | 4>(1);
   const [justAddedToCartId, setJustAddedToCartId] = useState<string | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const { user } = useAuth();
@@ -127,6 +128,10 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
       .catch(() => setAddresses([]))
       .finally(() => setAddressesLoading(false));
   }, [user]);
+
+  useEffect(() => {
+    if (cartOpen) setCheckoutStep(1);
+  }, [cartOpen]);
 
   // Pre-fill checkout phone from account (primary) when user has one and field is empty
   useEffect(() => {
@@ -379,6 +384,7 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
         clearCart();
         clearPromo();
         setSelectedPaymentGatewayId(null);
+        setCheckoutStep(1);
         setCartOpen(false);
         navigate('/orders');
       } catch (e) {
@@ -1084,15 +1090,36 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
         <>
           <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm animate-fade-in" onClick={() => setCartOpen(false)} aria-hidden />
           <div className="fixed top-0 right-0 w-full max-w-md h-full bg-theme-surface shadow-2xl z-50 flex flex-col border-l border-theme-border animate-slide-in-right">
-            <div className="p-5 border-b border-theme-border flex items-center justify-between bg-theme-bg">
-              <h2 className="text-xl font-bold text-theme-text">{t('cart_items', { count: totalCount })}</h2>
-              <button onClick={() => setCartOpen(false)} className="p-2 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-surface-hover transition-colors text-2xl leading-none" aria-label="Close cart">
-                ×
-              </button>
+            <div className="p-4 border-b border-theme-border bg-theme-bg shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-theme-text">
+                  {items.length === 0
+                  ? t('cart_items', { count: 0 })
+                  : `Checkout · ${t(checkoutStep === 1 ? 'checkout_step_cart' : checkoutStep === 2 ? 'checkout_step_address' : checkoutStep === 3 ? 'checkout_step_payment' : 'checkout_step_review')} (${checkoutStep}/4)`}
+                </h2>
+                <button onClick={() => setCartOpen(false)} className="p-2 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-surface-hover transition-colors text-2xl leading-none" aria-label="Close cart">
+                  ×
+                </button>
+              </div>
+              {items.length > 0 && (
+                <div className="flex gap-1 mt-2" aria-label="Checkout steps">
+                  {([1, 2, 3, 4] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setCheckoutStep(s)}
+                      className={`flex-1 h-1.5 rounded-full transition-colors ${
+                        checkoutStep === s ? 'bg-careplus-primary' : s < checkoutStep ? 'bg-careplus-primary/50' : 'bg-theme-border'
+                      }`}
+                      title={`${s}. ${t(s === 1 ? 'checkout_step_cart' : s === 2 ? 'checkout_step_address' : s === 3 ? 'checkout_step_payment' : 'checkout_step_review')}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex-1 overflow-auto p-5">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {items.length === 0 ? (
-                <div className="text-center py-12">
+                <div className="p-5 text-center py-12">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-theme-bg flex items-center justify-center">
                     <Package className="w-8 h-8 text-theme-muted" />
                   </div>
@@ -1100,187 +1127,252 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
                   <p className="text-sm text-theme-muted mt-1">Add items from the catalog to get started.</p>
                 </div>
               ) : (
-                <ul className="space-y-4">
-                  {items.map((i) => (
-                    <li key={i.product.id} className="flex gap-4 items-center p-3 rounded-xl bg-theme-bg border border-theme-border">
-                      {productImageUrl(i.product) ? (
-                        <img src={resolveImageUrl(productImageUrl(i.product))} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl bg-theme-surface flex items-center justify-center shrink-0">
-                          <Package className="w-7 h-7 text-theme-muted" />
+                <div className="p-5 space-y-4">
+                  {/* Step 1: Cart & quantity + promo */}
+                  {checkoutStep === 1 && (
+                    <>
+                      <ul className="space-y-4">
+                        {items.map((i) => (
+                          <li key={i.product.id} className="flex gap-4 items-center p-3 rounded-xl bg-theme-bg border border-theme-border">
+                            {productImageUrl(i.product) ? (
+                              <img src={resolveImageUrl(productImageUrl(i.product))} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                            ) : (
+                              <div className="w-14 h-14 rounded-xl bg-theme-surface flex items-center justify-center shrink-0">
+                                <Package className="w-7 h-7 text-theme-muted" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-theme-text truncate">{i.product.name}</p>
+                              <p className="text-sm text-theme-muted mt-0.5">
+                                {i.product.currency} {i.product.unit_price.toFixed(2)} × {i.quantity}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={1}
+                                max={i.product.stock_quantity}
+                                value={i.quantity}
+                                onChange={(e) => updateQuantity(i.product.id, parseInt(e.target.value, 10) || 1)}
+                                className="w-14 bg-theme-input-bg border border-theme-input-border rounded-lg px-2 py-1.5 text-center text-theme-text text-sm"
+                              />
+                              <button onClick={() => removeItem(i.product.id)} className="text-red-600 dark:text-red-400 text-sm font-medium hover:underline">
+                                {t('remove')}
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      {user && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-theme-muted">First order? Try a welcome code if you have one.</p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Promo code"
+                              value={promoCodeInput}
+                              onChange={(e) => { setPromoCodeInput(e.target.value); setPromoError(''); }}
+                              className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
+                              disabled={!!appliedPromo}
+                            />
+                            {appliedPromo ? (
+                              <button type="button" onClick={clearPromo} className="px-4 py-2.5 text-sm text-theme-muted hover:text-theme-text font-medium rounded-xl hover:bg-theme-surface-hover transition-colors">
+                                {t('remove')}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handleApplyPromo}
+                                disabled={applyingPromo || !promoCodeInput.trim()}
+                                className="px-4 py-2.5 bg-theme-surface-hover text-theme-text text-sm font-medium rounded-xl hover:bg-theme-border disabled:opacity-50 transition-colors"
+                              >
+                                {applyingPromo ? 'Applying...' : 'Apply'}
+                              </button>
+                            )}
+                          </div>
+                          {promoError && <p className="text-sm text-red-600 dark:text-red-400">{promoError}</p>}
+                          {appliedPromo && (
+                            <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Code applied: NPR {appliedPromo.discountAmount.toFixed(2)} off</p>
+                          )}
                         </div>
                       )}
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-theme-text truncate">{i.product.name}</p>
-                        <p className="text-sm text-theme-muted mt-0.5">
-                          {i.product.currency} {i.product.unit_price.toFixed(2)} × {i.quantity}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={i.product.stock_quantity}
-                          value={i.quantity}
-                          onChange={(e) => updateQuantity(i.product.id, parseInt(e.target.value, 10) || 1)}
-                          className="w-14 bg-theme-input-bg border border-theme-input-border rounded-lg px-2 py-1.5 text-center text-theme-text text-sm"
-                        />
-                        <button
-                          onClick={() => removeItem(i.product.id)}
-                          className="text-red-600 dark:text-red-400 text-sm font-medium hover:underline"
-                        >
-                          {t('remove')}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="p-5 border-t border-theme-border bg-theme-bg">
-              {user && items.length > 0 && (
-                <div className="mb-4 space-y-3">
-                  <p className="text-xs text-theme-muted">First order? Try a welcome code if you have one.</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Promo code"
-                      value={promoCodeInput}
-                      onChange={(e) => { setPromoCodeInput(e.target.value); setPromoError(''); }}
-                      className="flex-1 bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
-                      disabled={!!appliedPromo}
-                    />
-                    {appliedPromo ? (
-                      <button type="button" onClick={clearPromo} className="px-4 py-2.5 text-sm text-theme-muted hover:text-theme-text font-medium rounded-xl hover:bg-theme-surface-hover transition-colors">
-                        {t('remove')}
-                      </button>
-                    ) : (
                       <button
                         type="button"
-                        onClick={handleApplyPromo}
-                        disabled={applyingPromo || !promoCodeInput.trim()}
-                        className="px-4 py-2.5 bg-theme-surface-hover text-theme-text text-sm font-medium rounded-xl hover:bg-theme-border disabled:opacity-50 transition-colors"
+                        onClick={() => setCheckoutStep(2)}
+                        className="w-full py-3 bg-careplus-primary text-theme-text-inverse font-semibold rounded-xl hover:bg-careplus-secondary transition-colors"
                       >
-                        {applyingPromo ? 'Applying...' : 'Apply'}
+                        {t('checkout_next')}
                       </button>
-                    )}
-                  </div>
-                  {promoError && <p className="text-sm text-red-600 dark:text-red-400">{promoError}</p>}
-                  {appliedPromo && (
-                    <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Code applied: NPR {appliedPromo.discountAmount.toFixed(2)} off</p>
+                    </>
                   )}
-                  <div>
-                    <label className="text-sm font-medium text-theme-text flex items-center gap-1.5 mb-2">
-                      <MapPin className="w-4 h-4 text-careplus-primary shrink-0" />
-                      {t('checkout_delivery_address')}
-                    </label>
-                    {addressesLoading ? (
-                      <p className="text-xs text-theme-muted py-2">{t('profile_loading_addresses')}</p>
-                    ) : addresses.length === 0 ? (
-                      <p className="text-xs text-theme-muted py-2">{t('checkout_no_addresses')}</p>
-                    ) : (
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {addresses.map((addr) => (
-                          <label
-                            key={addr.id}
-                            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-                              selectedAddressId === addr.id
-                                ? 'border-careplus-primary bg-careplus-primary/10'
-                                : 'border-theme-border hover:bg-theme-bg'
-                            }`}
-                          >
+
+                  {/* Step 2: Address + phone + referral */}
+                  {checkoutStep === 2 && (
+                    <>
+                      <div>
+                        <label className="text-sm font-medium text-theme-text flex items-center gap-1.5 mb-2">
+                          <MapPin className="w-4 h-4 text-careplus-primary shrink-0" />
+                          {t('checkout_delivery_address')}
+                        </label>
+                        {addressesLoading ? (
+                          <p className="text-xs text-theme-muted py-2">{t('profile_loading_addresses')}</p>
+                        ) : addresses.length === 0 ? (
+                          <p className="text-xs text-theme-muted py-2">{t('checkout_no_addresses')}</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {addresses.map((addr) => (
+                              <label
+                                key={addr.id}
+                                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                                  selectedAddressId === addr.id ? 'border-careplus-primary bg-careplus-primary/10' : 'border-theme-border hover:bg-theme-bg'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="delivery-address"
+                                  value={addr.id}
+                                  checked={selectedAddressId === addr.id}
+                                  onChange={() => setSelectedAddressId(addr.id)}
+                                  className="mt-1 rounded-full border-theme-border text-careplus-primary focus:ring-careplus-primary"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  {addr.label && <span className="text-sm font-medium text-theme-text block">{addr.label}</span>}
+                                  <p className="text-xs text-theme-muted mt-0.5">{formatAddress(addr)}</p>
+                                  {addr.is_default && <span className="inline-block mt-1 text-[10px] font-medium text-careplus-primary">{t('profile_default')}</span>}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {user && (
+                        <>
+                          <div>
+                            <label className="text-sm text-theme-muted block mb-1">{t('checkout_phone_label')}</label>
                             <input
-                              type="radio"
-                              name="delivery-address"
-                              value={addr.id}
-                              checked={selectedAddressId === addr.id}
-                              onChange={() => setSelectedAddressId(addr.id)}
-                              className="mt-1 rounded-full border-theme-border text-careplus-primary focus:ring-careplus-primary"
+                              type="text"
+                              placeholder={t('checkout_phone_placeholder')}
+                              value={customerPhone}
+                              onChange={(e) => setCustomerPhone(e.target.value)}
+                              className="w-full bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
                             />
-                            <div className="min-w-0 flex-1">
-                              {addr.label && (
-                                <span className="text-sm font-medium text-theme-text block">{addr.label}</span>
-                              )}
-                              <p className="text-xs text-theme-muted mt-0.5">{formatAddress(addr)}</p>
-                              {addr.is_default && (
-                                <span className="inline-block mt-1 text-[10px] font-medium text-careplus-primary">{t('profile_default')}</span>
-                              )}
-                            </div>
-                          </label>
+                          </div>
+                          <div>
+                            <label className="text-sm text-theme-muted block mb-1">Referral code</label>
+                            <input
+                              type="text"
+                              placeholder="Friend's referral code"
+                              value={referralCodeInput}
+                              onChange={(e) => setReferralCodeInput(e.target.value)}
+                              className="w-full bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
+                            />
+                          </div>
+                          {pointsToRedeem != null && pointsToRedeem > 0 && <p className="text-sm text-theme-muted">Using {pointsToRedeem} points</p>}
+                        </>
+                      )}
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setCheckoutStep(1)} className="flex-1 py-3 border border-theme-border text-theme-text font-medium rounded-xl hover:bg-theme-surface-hover transition-colors">
+                          {t('checkout_back')}
+                        </button>
+                        <button type="button" onClick={() => setCheckoutStep(3)} className="flex-1 py-3 bg-careplus-primary text-theme-text-inverse font-semibold rounded-xl hover:bg-careplus-secondary transition-colors">
+                          {t('checkout_next')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Step 3: Payment method */}
+                  {checkoutStep === 3 && (
+                    <>
+                      {paymentGateways.length === 0 ? (
+                        <p className="text-sm text-theme-muted py-4">No payment methods available.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-theme-text mb-2">{t('payment_method')}</p>
+                          {paymentGateways.map((gw) => (
+                            <label
+                              key={gw.id}
+                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                                selectedPaymentGatewayId === gw.id ? 'border-careplus-primary bg-careplus-primary/10' : 'border-theme-border hover:bg-theme-bg'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="payment-gateway"
+                                value={gw.id}
+                                checked={selectedPaymentGatewayId === gw.id}
+                                onChange={() => setSelectedPaymentGatewayId(gw.id)}
+                                className="rounded-full border-theme-border text-careplus-primary focus:ring-careplus-primary"
+                              />
+                              <span className="text-sm font-medium text-theme-text">{gw.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setCheckoutStep(2)} className="flex-1 py-3 border border-theme-border text-theme-text font-medium rounded-xl hover:bg-theme-surface-hover transition-colors">
+                          {t('checkout_back')}
+                        </button>
+                        <button type="button" onClick={() => setCheckoutStep(4)} className="flex-1 py-3 bg-careplus-primary text-theme-text-inverse font-semibold rounded-xl hover:bg-careplus-secondary transition-colors">
+                          {t('checkout_next')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Step 4: Review & submit */}
+                  {checkoutStep === 4 && (
+                    <>
+                      <p className="text-sm font-medium text-theme-text">{t('checkout_review_and_submit')}</p>
+                      <div className="rounded-xl border border-theme-border bg-theme-bg p-3 space-y-2">
+                        {items.map((i) => (
+                          <div key={i.product.id} className="flex justify-between text-sm">
+                            <span className="text-theme-text truncate mr-2">{i.product.name} × {i.quantity}</span>
+                            <span className="text-theme-muted shrink-0">NPR {(i.product.unit_price * i.quantity).toFixed(2)}</span>
+                          </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-sm text-theme-muted block mb-1">{t('checkout_phone_label')}</label>
-                    <input
-                      type="text"
-                      placeholder={t('checkout_phone_placeholder')}
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      className="w-full bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm text-theme-muted block mb-1">Referral code</label>
-                    <input
-                      type="text"
-                      placeholder="Friend's referral code"
-                      value={referralCodeInput}
-                      onChange={(e) => setReferralCodeInput(e.target.value)}
-                      className="w-full bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"
-                    />
-                  </div>
-                  {pointsToRedeem != null && pointsToRedeem > 0 && (
-                    <p className="text-sm text-theme-muted">Using {pointsToRedeem} points</p>
+                      {(() => {
+                        const addr = selectedAddressId ? addresses.find((a) => a.id === selectedAddressId) : null;
+                        return addr ? (
+                          <div className="text-sm">
+                            <span className="text-theme-muted">{t('checkout_delivery_address')}: </span>
+                            <span className="text-theme-text">{formatAddress(addr)}</span>
+                          </div>
+                        ) : null;
+                      })()}
+                      {paymentGateways.length > 0 && selectedPaymentGatewayId && (
+                        <div className="text-sm">
+                          <span className="text-theme-muted">{t('payment_method')}: </span>
+                          <span className="text-theme-text">{paymentGateways.find((g) => g.id === selectedPaymentGatewayId)?.name}</span>
+                        </div>
+                      )}
+                      {appliedPromo && (
+                        <p className="text-sm text-emerald-600 dark:text-emerald-400">Promo: {appliedPromo.code} (−NPR {appliedPromo.discountAmount.toFixed(2)})</p>
+                      )}
+                      <p className="font-bold text-theme-text text-lg">
+                        {appliedPromo ? (
+                          <>Subtotal NPR {totalAmount.toFixed(2)} · Discount −NPR {appliedPromo.discountAmount.toFixed(2)}<br />{t('total')} NPR {orderTotal.toFixed(2)}</>
+                        ) : (
+                          <>{t('total')} NPR {totalAmount.toFixed(2)}</>
+                        )}
+                      </p>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setCheckoutStep(3)} className="flex-1 py-3 border border-theme-border text-theme-text font-medium rounded-xl hover:bg-theme-surface-hover transition-colors">
+                          {t('checkout_back')}
+                        </button>
+                        <button
+                          onClick={handlePlaceOrder}
+                          disabled={placing}
+                          className="flex-1 py-3.5 bg-careplus-primary text-theme-text-inverse font-semibold rounded-xl hover:bg-careplus-secondary active:scale-[0.98] disabled:opacity-50 transition-all btn-press"
+                        >
+                          {placing ? t('placing') : user ? t('place_order') : t('login_to_place_order')}
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
-              {items.length > 0 && paymentGateways.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-theme-text mb-2">{t('payment_method')}</p>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {paymentGateways.map((gw) => (
-                      <label
-                        key={gw.id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-                          selectedPaymentGatewayId === gw.id
-                            ? 'border-careplus-primary bg-careplus-primary/10'
-                            : 'border-theme-border hover:bg-theme-bg'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="payment-gateway"
-                          value={gw.id}
-                          checked={selectedPaymentGatewayId === gw.id}
-                          onChange={() => setSelectedPaymentGatewayId(gw.id)}
-                          className="rounded-full border-theme-border text-careplus-primary focus:ring-careplus-primary"
-                        />
-                        <span className="text-sm font-medium text-theme-text">{gw.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <p className="font-bold text-theme-text text-lg mb-3">
-                {appliedPromo ? (
-                  <>
-                    <span className="text-theme-muted font-normal text-sm">Subtotal NPR {totalAmount.toFixed(2)} · Discount -NPR {appliedPromo.discountAmount.toFixed(2)}</span>
-                    <br />
-                    {t('total')} NPR {orderTotal.toFixed(2)}
-                  </>
-                ) : (
-                  <>{t('total')} NPR {totalAmount.toFixed(2)}</>
-                )}
-              </p>
-              <button
-                onClick={handlePlaceOrder}
-                disabled={items.length === 0 || placing}
-                className="w-full py-3.5 bg-careplus-primary text-theme-text-inverse font-semibold rounded-xl hover:bg-careplus-secondary hover:shadow-lg active:scale-[0.98] disabled:opacity-50 transition-all duration-200 btn-press"
-              >
-                {placing ? t('placing') : user ? t('place_order') : t('login_to_place_order')}
-              </button>
             </div>
           </div>
         </>

@@ -13,12 +13,19 @@ import (
 )
 
 type OrderHandler struct {
-	orderService inbound.OrderService
-	logger       *zap.Logger
+	orderService             inbound.OrderService
+	orderFeedbackService     inbound.OrderFeedbackService
+	orderReturnRequestService inbound.OrderReturnRequestService
+	logger                   *zap.Logger
 }
 
-func NewOrderHandler(orderService inbound.OrderService, logger *zap.Logger) *OrderHandler {
-	return &OrderHandler{orderService: orderService, logger: logger}
+func NewOrderHandler(orderService inbound.OrderService, orderFeedbackService inbound.OrderFeedbackService, orderReturnRequestService inbound.OrderReturnRequestService, logger *zap.Logger) *OrderHandler {
+	return &OrderHandler{
+		orderService:             orderService,
+		orderFeedbackService:     orderFeedbackService,
+		orderReturnRequestService: orderReturnRequestService,
+		logger:                   logger,
+	}
 }
 
 type createOrderRequest struct {
@@ -159,4 +166,135 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, o)
+}
+
+type createOrderFeedbackRequest struct {
+	Rating  int    `json:"rating" binding:"required,min=1,max=5"`
+	Comment string `json:"comment"`
+}
+
+func (h *OrderHandler) CreateFeedback(c *gin.Context) {
+	orderID, err := uuid.Parse(c.Param("orderId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid order id"})
+		return
+	}
+	userIDStr, _ := c.Get("user_id")
+	if userIDStr == nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Code: errors.ErrCodeUnauthorized, Message: "authentication required"})
+		return
+	}
+	userID, _ := uuid.Parse(userIDStr.(string))
+	var body createOrderFeedbackRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, response.BindValidationError(errors.ErrCodeValidation, "Invalid input", err))
+		return
+	}
+	f, err := h.orderFeedbackService.Create(c.Request.Context(), orderID, userID, body.Rating, body.Comment)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, f)
+}
+
+func (h *OrderHandler) GetFeedback(c *gin.Context) {
+	orderID, err := uuid.Parse(c.Param("orderId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid order id"})
+		return
+	}
+	// Ensure user can view this order (same check as GetByID).
+	o, err := h.orderService.GetByID(c.Request.Context(), orderID)
+	if err != nil || o == nil {
+		c.JSON(http.StatusNotFound, response.ErrorResponse{Code: errors.ErrCodeNotFound, Message: "order not found"})
+		return
+	}
+	if roleVal, ok := c.Get("role"); ok {
+		if roleStr, _ := roleVal.(string); roleStr == "staff" {
+			userIDStr, _ := c.Get("user_id")
+			if userIDStr != nil {
+				if userID, parseErr := uuid.Parse(userIDStr.(string)); parseErr == nil && o.CreatedBy != userID {
+					c.JSON(http.StatusForbidden, response.ErrorResponse{Code: errors.ErrCodeForbidden, Message: "you can only view your own orders"})
+					return
+				}
+			}
+		}
+	}
+	f, err := h.orderFeedbackService.GetByOrderID(c.Request.Context(), orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: err.Error()})
+		return
+	}
+	if f == nil {
+		c.JSON(http.StatusOK, nil)
+		return
+	}
+	c.JSON(http.StatusOK, f)
+}
+
+type createReturnRequestBody struct {
+	VideoURL    string   `json:"video_url"`
+	PhotoURLs   []string `json:"photo_urls"`
+	Notes       string   `json:"notes"`
+	Description string   `json:"description"`
+}
+
+func (h *OrderHandler) CreateReturnRequest(c *gin.Context) {
+	orderID, err := uuid.Parse(c.Param("orderId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid order id"})
+		return
+	}
+	userIDStr, _ := c.Get("user_id")
+	if userIDStr == nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Code: errors.ErrCodeUnauthorized, Message: "authentication required"})
+		return
+	}
+	userID, _ := uuid.Parse(userIDStr.(string))
+	var body createReturnRequestBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, response.BindValidationError(errors.ErrCodeValidation, "Invalid input", err))
+		return
+	}
+	req, err := h.orderReturnRequestService.Create(c.Request.Context(), orderID, userID, body.VideoURL, body.PhotoURLs, body.Notes, body.Description)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, req)
+}
+
+func (h *OrderHandler) GetReturnRequest(c *gin.Context) {
+	orderID, err := uuid.Parse(c.Param("orderId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid order id"})
+		return
+	}
+	o, err := h.orderService.GetByID(c.Request.Context(), orderID)
+	if err != nil || o == nil {
+		c.JSON(http.StatusNotFound, response.ErrorResponse{Code: errors.ErrCodeNotFound, Message: "order not found"})
+		return
+	}
+	if roleVal, ok := c.Get("role"); ok {
+		if roleStr, _ := roleVal.(string); roleStr == "staff" {
+			userIDStr, _ := c.Get("user_id")
+			if userIDStr != nil {
+				if userID, parseErr := uuid.Parse(userIDStr.(string)); parseErr == nil && o.CreatedBy != userID {
+					c.JSON(http.StatusForbidden, response.ErrorResponse{Code: errors.ErrCodeForbidden, Message: "you can only view your own orders"})
+					return
+				}
+			}
+		}
+	}
+	req, err := h.orderReturnRequestService.GetByOrderID(c.Request.Context(), orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: err.Error()})
+		return
+	}
+	if req == nil {
+		c.JSON(http.StatusOK, nil)
+		return
+	}
+	c.JSON(http.StatusOK, req)
 }

@@ -84,3 +84,16 @@ func (r *orderRepo) CountByCreatedByAndPharmacy(ctx context.Context, createdBy, 
 	err := r.db.WithContext(ctx).Model(&models.Order{}).Where("created_by = ? AND pharmacy_id = ?", createdBy, pharmacyID).Count(&count).Error
 	return count, err
 }
+
+func (r *orderRepo) GetLatestCompletedOrderWithProduct(ctx context.Context, pharmacyID, userID, productID uuid.UUID) (*models.Order, error) {
+	var o models.Order
+	err := r.db.WithContext(ctx).
+		Joins("INNER JOIN order_items ON order_items.order_id = orders.id AND order_items.product_id = ?", productID).
+		Where("orders.pharmacy_id = ? AND orders.created_by = ? AND orders.status = ?", pharmacyID, userID, models.OrderStatusCompleted).
+		Order("COALESCE(orders.completed_at, orders.updated_at) DESC").
+		First(&o).Error
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
+}

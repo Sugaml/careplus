@@ -117,6 +117,18 @@ type OrderService interface {
 	Accept(ctx context.Context, orderID uuid.UUID) (*models.Order, error)
 }
 
+// OrderFeedbackService allows the order creator (end user) to submit feedback on completed orders.
+type OrderFeedbackService interface {
+	Create(ctx context.Context, orderID, userID uuid.UUID, rating int, comment string) (*models.OrderFeedback, error)
+	GetByOrderID(ctx context.Context, orderID uuid.UUID) (*models.OrderFeedback, error)
+}
+
+// OrderReturnRequestService allows the order creator to submit a return request (defect) within 3 days of completion.
+type OrderReturnRequestService interface {
+	Create(ctx context.Context, orderID, userID uuid.UUID, videoURL string, photoURLs []string, notes, description string) (*models.OrderReturnRequest, error)
+	GetByOrderID(ctx context.Context, orderID uuid.UUID) (*models.OrderReturnRequest, error)
+}
+
 type OrderItemInput struct {
 	ProductID uuid.UUID `json:"product_id" binding:"required"`
 	Quantity  int       `json:"quantity" binding:"required,min=1"`

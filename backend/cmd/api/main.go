@@ -63,6 +63,8 @@ func main() {
 	reviewLikeRepo := persistence.NewReviewLikeRepository(db)
 	reviewCommentRepo := persistence.NewReviewCommentRepository(db)
 	orderRepo := persistence.NewOrderRepository(db)
+	orderFeedbackRepo := persistence.NewOrderFeedbackRepository(db)
+	orderReturnRequestRepo := persistence.NewOrderReturnRequestRepository(db)
 	paymentRepo := persistence.NewPaymentRepository(db)
 	paymentGatewayRepo := persistence.NewPaymentGatewayRepository(db)
 	invoiceRepo := persistence.NewInvoiceRepository(db)
@@ -100,7 +102,7 @@ func main() {
 	categoryService := services.NewCategoryService(categoryRepo, zapLogger)
 	productUnitService := services.NewProductUnitService(productUnitRepo, zapLogger)
 	membershipService := services.NewMembershipService(membershipRepo, zapLogger)
-	reviewService := services.NewReviewService(productReviewRepo, reviewLikeRepo, reviewCommentRepo, productRepo, userRepo, zapLogger)
+	reviewService := services.NewReviewService(productReviewRepo, reviewLikeRepo, reviewCommentRepo, productRepo, orderRepo, userRepo, zapLogger)
 	inventoryService := services.NewInventoryService(inventoryBatchRepo, productRepo)
 	promoCodeService := services.NewPromoCodeService(promoCodeRepo, orderRepo, zapLogger)
 	referralPointsService := services.NewReferralPointsService(customerRepo, customerMembershipRepo, pointsTransactionRepo, referralPointsConfigRepo, orderRepo, userRepo, zapLogger)
@@ -108,6 +110,10 @@ func main() {
 	paymentService := services.NewPaymentService(paymentRepo, zapLogger)
 	paymentGatewayService := services.NewPaymentGatewayService(paymentGatewayRepo, zapLogger)
 	orderService := services.NewOrderService(orderRepo, productRepo, inventoryService, promoCodeRepo, promoCodeService, customerRepo, customerMembershipRepo, referralPointsServiceInterface, paymentGatewayRepo, paymentService, userRepo, staffPointsConfigRepo, zapLogger)
+	orderFeedbackService := services.NewOrderFeedbackService(orderRepo, orderFeedbackRepo)
+	var orderFeedbackServiceInterface inbound.OrderFeedbackService = orderFeedbackService
+	orderReturnRequestService := services.NewOrderReturnRequestService(orderRepo, orderReturnRequestRepo)
+	var orderReturnRequestServiceInterface inbound.OrderReturnRequestService = orderReturnRequestService
 	invoiceService := services.NewInvoiceService(invoiceRepo, orderRepo, paymentRepo, zapLogger)
 	activityLogService := services.NewActivityLogService(activityLogRepo, zapLogger)
 	notificationService := services.NewNotificationService(notificationRepo, zapLogger)
@@ -158,7 +164,7 @@ func main() {
 	membershipHandler := handlers.NewMembershipHandler(membershipServiceInterface, zapLogger)
 	var reviewServiceInterface inbound.ReviewService = reviewService
 	reviewHandler := handlers.NewReviewHandler(reviewServiceInterface, zapLogger)
-	orderHandler := handlers.NewOrderHandler(orderServiceInterface, zapLogger)
+	orderHandler := handlers.NewOrderHandler(orderServiceInterface, orderFeedbackServiceInterface, orderReturnRequestServiceInterface, zapLogger)
 	promoCodeHandler := handlers.NewPromoCodeHandler(promoCodeService, zapLogger)
 	paymentHandler := handlers.NewPaymentHandler(paymentServiceInterface, zapLogger)
 	paymentGatewayHandler := handlers.NewPaymentGatewayHandler(paymentGatewayService, zapLogger)

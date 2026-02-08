@@ -761,6 +761,15 @@ export const orderApi = {
   accept: (id: string) => api<Order>(`/orders/${id}/accept`, { method: 'POST' }),
   updateStatus: (id: string, status: string) =>
     api<Order>(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  getReturnRequest: (orderId: string) => api<OrderReturnRequest | null>(`/orders/${orderId}/return-request`),
+  createReturnRequest: (orderId: string, body: { video_url?: string; photo_urls?: string[]; notes: string; description: string }) =>
+    api<OrderReturnRequest>(`/orders/${orderId}/return-request`, { method: 'POST', body: JSON.stringify(body) }),
+};
+
+export const orderFeedbackApi = {
+  getByOrder: (orderId: string) => api<OrderFeedback | null>(`/orders/${orderId}/feedback`),
+  create: (orderId: string, body: { rating: number; comment?: string }) =>
+    api<OrderFeedback>(`/orders/${orderId}/feedback`, { method: 'POST', body: JSON.stringify(body) }),
 };
 
 export const paymentApi = {
@@ -1094,7 +1103,35 @@ export interface Order {
   currency: string;
   notes?: string;
   items?: OrderItem[];
+  created_by?: string;
   created_at: string;
+  updated_at?: string;
+  /** Set when order status becomes completed (for 7-day review / 3-day return windows). */
+  completed_at?: string;
+}
+
+/** Return request for a completed order (defect); allowed within 3 days of completion. */
+export interface OrderReturnRequest {
+  id: string;
+  order_id: string;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  video_url: string;
+  photo_urls: string[];
+  notes: string;
+  description: string;
+  created_at: string;
+}
+
+/** Order feedback (rating + optional comment) from the customer who placed the order. */
+export interface OrderFeedback {
+  id: string;
+  order_id: string;
+  user_id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  user?: { id: string; name?: string; email?: string };
 }
 
 export interface CreateOrderBody {

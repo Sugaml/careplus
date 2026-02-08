@@ -15,6 +15,7 @@ import ProductsExplorePage from '@/pages/ProductsExplorePage';
 import DashboardPage from '@/pages/DashboardPage';
 import ProductsPage from '@/pages/ProductsPage';
 import OrdersPage from '@/pages/OrdersPage';
+import OrderDetailPage from '@/pages/OrderDetailPage';
 import BillingPage from '@/pages/BillingPage';
 import InvoicesPage from '@/pages/InvoicesPage';
 import InvoiceDetailPage from '@/pages/InvoiceDetailPage';
@@ -100,6 +101,7 @@ function AppRoutes() {
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="orders" element={<OrdersPage />} />
+        <Route path="orders/:id" element={<OrderDetailPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="promo-codes" element={<PromoCodesPage />} />
         <Route path="invoices" element={<InvoicesPage />} />
