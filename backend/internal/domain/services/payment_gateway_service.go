@@ -58,6 +58,12 @@ func (s *paymentGatewayService) Update(ctx context.Context, pharmacyID uuid.UUID
 	}
 	existing.IsActive = pg.IsActive
 	existing.SortOrder = pg.SortOrder
+	existing.QrDetails = pg.QrDetails
+	existing.BankDetails = pg.BankDetails
+	existing.QrImageURL = pg.QrImageURL
+	existing.ClientID = pg.ClientID
+	existing.SecretKey = pg.SecretKey
+	existing.ExtraConfig = pg.ExtraConfig
 	if err := s.repo.Update(ctx, existing); err != nil {
 		return nil, errors.ErrInternal("failed to update payment gateway", err)
 	}

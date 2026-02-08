@@ -103,7 +103,7 @@ func main() {
 	reviewService := services.NewReviewService(productReviewRepo, reviewLikeRepo, reviewCommentRepo, productRepo, userRepo, zapLogger)
 	inventoryService := services.NewInventoryService(inventoryBatchRepo, productRepo)
 	promoCodeService := services.NewPromoCodeService(promoCodeRepo, orderRepo, zapLogger)
-	referralPointsService := services.NewReferralPointsService(customerRepo, customerMembershipRepo, pointsTransactionRepo, referralPointsConfigRepo, orderRepo, zapLogger)
+	referralPointsService := services.NewReferralPointsService(customerRepo, customerMembershipRepo, pointsTransactionRepo, referralPointsConfigRepo, orderRepo, userRepo, zapLogger)
 	var referralPointsServiceInterface inbound.ReferralPointsService = referralPointsService
 	paymentService := services.NewPaymentService(paymentRepo, zapLogger)
 	paymentGatewayService := services.NewPaymentGatewayService(paymentGatewayRepo, zapLogger)

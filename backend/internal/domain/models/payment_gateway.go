@@ -23,9 +23,17 @@ type PaymentGateway struct {
 	Name       string         `gorm:"size:255;not null" json:"name"`
 	IsActive   bool           `gorm:"default:true;index" json:"is_active"`
 	SortOrder  int            `gorm:"default:0" json:"sort_order"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
+	// QR-type gateway: optional details and image
+	QrDetails   string `gorm:"type:text" json:"qr_details,omitempty"`
+	BankDetails string `gorm:"type:text" json:"bank_details,omitempty"`
+	QrImageURL  string `gorm:"size:1024" json:"qr_image_url,omitempty"`
+	// eSewa/Khalti (and similar): client credentials and extra config
+	ClientID    string `gorm:"size:255" json:"client_id,omitempty"`
+	SecretKey   string `gorm:"size:512" json:"secret_key,omitempty"`
+	ExtraConfig string `gorm:"type:text" json:"extra_config,omitempty"` // JSON or other details (API URL, env, etc.)
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Pharmacy *Pharmacy `gorm:"foreignKey:PharmacyID" json:"pharmacy,omitempty"`
 }

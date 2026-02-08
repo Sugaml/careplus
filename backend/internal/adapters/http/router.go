@@ -103,12 +103,15 @@ func NewRouter(
 			authProtected.PUT("/me/addresses/:id", addressHandler.Update)
 			authProtected.DELETE("/me/addresses/:id", addressHandler.Delete)
 			authProtected.PATCH("/me/addresses/:id/default", addressHandler.SetDefault)
+			authProtected.GET("/me/customer-profile", referralHandler.GetMyCustomerProfile)
 		}
 
 		api := v1.Group("")
 		api.Use(middleware.Auth(authProvider, userRepo, logger))
 		api.Use(middleware.ActivityLog(activityLogService, logger))
 		{
+			// Upload: any authenticated user (profile picture, etc.); staff also use for products/CV
+			api.POST("/upload", uploadHandler.Upload)
 			api.GET("/dashboard/stats", dashboardHandler.GetStats)
 			api.GET("/config", configHandler.GetOrCreate) // any auth: read config for branding (sidebar/header)
 			api.GET("/announcements/active", announcementHandler.ListActiveForUser)
@@ -226,10 +229,9 @@ func NewRouter(
 				adminOrManager.DELETE("/daily-logs/:id", dailyLogHandler.Delete)
 			}
 
-			// Staff role only (admin, manager, pharmacist): product/category/inventory/invoice/payment management, referral, upload
+			// Staff role only (admin, manager, pharmacist): product/category/inventory/invoice/payment management, referral
 			staffRole := api.Group("", middleware.RequireStaffRole())
 			{
-				staffRole.POST("/upload", uploadHandler.Upload)
 				products := staffRole.Group("/products")
 				{
 					products.POST("", productHandler.Create)

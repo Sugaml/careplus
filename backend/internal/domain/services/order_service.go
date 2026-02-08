@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"math"
+	"strings"
 
 	"github.com/careplus/pharmacy-backend/internal/domain/models"
 	"github.com/careplus/pharmacy-backend/internal/ports/inbound"
@@ -48,7 +49,7 @@ func gatewayCodeToPaymentMethod(code string) models.PaymentMethod {
 	}
 }
 
-func (s *orderService) Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []inbound.OrderItemInput, notes string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int, paymentGatewayID *uuid.UUID) (*models.Order, error) {
+func (s *orderService) Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []inbound.OrderItemInput, notes string, deliveryAddress string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int, paymentGatewayID *uuid.UUID) (*models.Order, error) {
 	if len(items) == 0 {
 		return nil, errors.ErrValidation("at least one item is required")
 	}
@@ -77,7 +78,8 @@ func (s *orderService) Create(ctx context.Context, pharmacyID, createdBy uuid.UU
 	pointsRedeemed := 0
 	discountFromPoints := 0.0
 
-	if s.referralPointsSvc != nil {
+	// Only resolve customer / referral / points when phone is provided (required to identify customer for referral program).
+	if s.referralPointsSvc != nil && strings.TrimSpace(customerPhone) != "" {
 		cid, rcu, pr, dfp, err := s.referralPointsSvc.PrepareOrderReferralAndPoints(ctx, pharmacyID, customerName, customerPhone, customerEmail, referralCode, pointsToRedeem, subTotal)
 		if err != nil {
 			return nil, err
@@ -138,6 +140,7 @@ func (s *orderService) Create(ctx context.Context, pharmacyID, createdBy uuid.UU
 		SubTotal:         subTotal,
 		TaxAmount:        0,
 		DiscountAmount:   discount,
+		DeliveryAddress:  strings.TrimSpace(deliveryAddress),
 		PromoCodeID:      promoCodeID,
 		TotalAmount:      totalAmount,
 		Currency:         "NPR",

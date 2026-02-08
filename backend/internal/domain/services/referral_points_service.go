@@ -20,10 +20,11 @@ const referralCodeLen = 8
 type referralPointsService struct {
 	customerRepo           outbound.CustomerRepository
 	customerMembershipRepo outbound.CustomerMembershipRepository
-	pointsRepo            outbound.PointsTransactionRepository
-	configRepo            outbound.ReferralPointsConfigRepository
-	orderRepo             outbound.OrderRepository
-	logger                *zap.Logger
+	pointsRepo             outbound.PointsTransactionRepository
+	configRepo             outbound.ReferralPointsConfigRepository
+	orderRepo              outbound.OrderRepository
+	userRepo               outbound.UserRepository
+	logger                 *zap.Logger
 }
 
 func NewReferralPointsService(
@@ -32,6 +33,7 @@ func NewReferralPointsService(
 	pointsRepo outbound.PointsTransactionRepository,
 	configRepo outbound.ReferralPointsConfigRepository,
 	orderRepo outbound.OrderRepository,
+	userRepo outbound.UserRepository,
 	logger *zap.Logger,
 ) inbound.ReferralPointsService {
 	return &referralPointsService{
@@ -40,6 +42,7 @@ func NewReferralPointsService(
 		pointsRepo:             pointsRepo,
 		configRepo:             configRepo,
 		orderRepo:              orderRepo,
+		userRepo:               userRepo,
 		logger:                 logger,
 	}
 }
@@ -369,4 +372,43 @@ func (s *referralPointsService) ListPointsTransactions(ctx context.Context, cust
 		limit = 50
 	}
 	return s.pointsRepo.ListByCustomer(ctx, customerID, limit, offset)
+}
+
+func (s *referralPointsService) GetMyCustomerProfile(ctx context.Context, userID, pharmacyID uuid.UUID) (*inbound.MyCustomerProfileResponse, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil || user == nil {
+		return &inbound.MyCustomerProfileResponse{}, nil
+	}
+	phone := strings.TrimSpace(user.Phone)
+	if phone == "" {
+		return &inbound.MyCustomerProfileResponse{}, nil
+	}
+	// Ensure each user has one customer (and thus one referral code): get-or-create by phone so they can share it even before first order.
+	cust, err := s.GetOrCreateCustomer(ctx, pharmacyID, user.Name, phone, user.Email)
+	if err != nil || cust == nil {
+		return &inbound.MyCustomerProfileResponse{}, nil
+	}
+	custWithMem, err := s.GetCustomerByPhoneWithMembership(ctx, pharmacyID, phone)
+	if err != nil || custWithMem == nil || custWithMem.Customer == nil {
+		custWithMem = &inbound.CustomerWithMembership{Customer: cust}
+	} else {
+		cust = custWithMem.Customer
+	}
+	txs, err := s.pointsRepo.ListByCustomer(ctx, cust.ID, 50, 0)
+	if err != nil {
+		txs = nil
+	}
+	pointsEarnedFromPurchases := 0
+	for _, tx := range txs {
+		if tx.Type == models.PointsTransactionTypeEarnPurchase && tx.Amount > 0 {
+			pointsEarnedFromPurchases += tx.Amount
+		}
+	}
+	out := &inbound.MyCustomerProfileResponse{
+		Customer:                  cust,
+		Membership:                custWithMem.Membership,
+		PointsEarnedFromPurchases: pointsEarnedFromPurchases,
+		PointsTransactions:       txs,
+	}
+	return out, nil
 }

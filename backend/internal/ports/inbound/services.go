@@ -13,7 +13,7 @@ type AuthService interface {
 	Login(ctx context.Context, email, password string) (accessToken, refreshToken string, user *models.User, err error)
 	RefreshToken(ctx context.Context, refreshToken string) (accessToken string, err error)
 	GetCurrentUser(ctx context.Context, userID uuid.UUID) (*models.User, error)
-	UpdateProfile(ctx context.Context, userID uuid.UUID, name string) (*models.User, error)
+	UpdateProfile(ctx context.Context, userID uuid.UUID, name string, phone *string, photoURL *string) (*models.User, error)
 	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
 }
 
@@ -110,7 +110,7 @@ type ProductService interface {
 }
 
 type OrderService interface {
-	Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []OrderItemInput, notes string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int, paymentGatewayID *uuid.UUID) (*models.Order, error)
+	Create(ctx context.Context, pharmacyID, createdBy uuid.UUID, customerName, customerPhone, customerEmail string, items []OrderItemInput, notes string, deliveryAddress string, discountAmount *float64, promoCode *string, referralCode *string, pointsToRedeem *int, paymentGatewayID *uuid.UUID) (*models.Order, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Order, error)
 	List(ctx context.Context, pharmacyID uuid.UUID, createdBy *uuid.UUID, status *string) ([]*models.Order, error)
 	UpdateStatus(ctx context.Context, orderID uuid.UUID, status models.OrderStatus) (*models.Order, error)
@@ -316,6 +316,16 @@ type ReferralPointsService interface {
 	// GetCustomerByPhoneWithMembership returns customer with optional membership (id, name) for billing display.
 	GetCustomerByPhoneWithMembership(ctx context.Context, pharmacyID uuid.UUID, phone string) (*CustomerWithMembership, error)
 	ListPointsTransactions(ctx context.Context, customerID uuid.UUID, limit, offset int) ([]*models.PointsTransaction, error)
+	// GetMyCustomerProfile returns the customer profile for the logged-in user (matched by user phone), for end-user profile: referral code, points, membership, earned from purchases.
+	GetMyCustomerProfile(ctx context.Context, userID, pharmacyID uuid.UUID) (*MyCustomerProfileResponse, error)
+}
+
+// MyCustomerProfileResponse is the payload for GET /auth/me/customer-profile (end-user rewards/loyalty).
+type MyCustomerProfileResponse struct {
+	Customer                  *models.Customer             `json:"customer,omitempty"`                    // nil if user has no phone or no customer found
+	Membership                *MembershipInfo              `json:"membership,omitempty"`                  // set when customer has an active membership
+	PointsEarnedFromPurchases int                          `json:"points_earned_from_purchases"`          // sum of earn_purchase transaction amounts
+	PointsTransactions       []*models.PointsTransaction  `json:"points_transactions,omitempty"`         // recent history (e.g. last 20)
 }
 
 type AnnouncementService interface {

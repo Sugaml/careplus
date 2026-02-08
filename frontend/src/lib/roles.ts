@@ -13,7 +13,7 @@ export const STAFF_DASHBOARD_ROLES: string[] = [ROLE_ADMIN, ROLE_MANAGER, ROLE_P
 export const DASHBOARD_ROLES: string[] = [...STAFF_DASHBOARD_ROLES, ROLE_STAFF];
 
 /** Paths that end-users (role staff) are allowed to access. Others redirect to /dashboard. */
-export const BUYER_ALLOWED_PATHS = ['/dashboard', '/catalog', '/orders', '/chat', '/profile'];
+export const BUYER_ALLOWED_PATHS = ['/dashboard', '/catalog', '/orders', '/chat', '/profile', '/blog'];
 
 export function isStaffRole(role: string | undefined): boolean {
   return !!role && STAFF_DASHBOARD_ROLES.includes(role);

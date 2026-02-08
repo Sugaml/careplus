@@ -141,7 +141,9 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 }
 
 type updateProfileRequest struct {
-	Name string `json:"name"`
+	Name     string  `json:"name"`
+	Phone    *string `json:"phone"`
+	PhotoURL *string `json:"photo_url"`
 }
 
 type changePasswordRequest struct {
@@ -188,7 +190,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.BindValidationError(errors.ErrCodeValidation, "Invalid input", err))
 		return
 	}
-	user, err := h.authService.UpdateProfile(c.Request.Context(), userID, req.Name)
+	user, err := h.authService.UpdateProfile(c.Request.Context(), userID, req.Name, req.Phone, req.PhotoURL)
 	if err != nil {
 		if errors.IsAppError(err) {
 			appErr := errors.GetAppError(err)

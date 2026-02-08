@@ -27,6 +27,7 @@ type createOrderRequest struct {
 	CustomerEmail     string                   `json:"customer_email"`
 	Items             []inbound.OrderItemInput  `json:"items" binding:"required"`
 	Notes             string                   `json:"notes"`
+	DeliveryAddress   string                   `json:"delivery_address"` // optional; selected user address for delivery
 	DiscountAmount    *float64                 `json:"discount_amount"`
 	PromoCode         *string                  `json:"promo_code"`
 	ReferralCode      *string                  `json:"referral_code"`
@@ -50,7 +51,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 			paymentGatewayID = &parsed
 		}
 	}
-	o, err := h.orderService.Create(c.Request.Context(), pharmacyID, userID, req.CustomerName, req.CustomerPhone, req.CustomerEmail, req.Items, req.Notes, req.DiscountAmount, req.PromoCode, req.ReferralCode, req.PointsToRedeem, paymentGatewayID)
+	o, err := h.orderService.Create(c.Request.Context(), pharmacyID, userID, req.CustomerName, req.CustomerPhone, req.CustomerEmail, req.Items, req.Notes, req.DeliveryAddress, req.DiscountAmount, req.PromoCode, req.ReferralCode, req.PointsToRedeem, paymentGatewayID)
 	if err != nil {
 		writeServiceError(c, err)
 		return

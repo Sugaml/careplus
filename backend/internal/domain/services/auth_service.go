@@ -85,7 +85,7 @@ func (s *authService) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*mo
 	return s.userRepo.GetByID(ctx, userID)
 }
 
-func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, name string) (*models.User, error) {
+func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, name string, phone *string, photoURL *string) (*models.User, error) {
 	u, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil || u == nil {
 		return nil, errors.ErrNotFound("user")
@@ -94,6 +94,12 @@ func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, name 
 		return nil, errors.ErrForbidden("account is inactive")
 	}
 	u.Name = name
+	if phone != nil {
+		u.Phone = *phone
+	}
+	if photoURL != nil {
+		u.PhotoURL = *photoURL
+	}
 	if err := s.userRepo.Update(ctx, u); err != nil {
 		return nil, errors.ErrInternal("failed to update profile", err)
 	}

@@ -135,8 +135,10 @@ export const authApi = {
     }),
   me: () => api<User>('/auth/me'),
   logout: () => api<{ message: string }>('/auth/logout', { method: 'POST' }),
-  updateProfile: (body: { name: string }) =>
+  updateProfile: (body: { name?: string; phone?: string; photo_url?: string }) =>
     api<User>('/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
+  getMyCustomerProfile: () =>
+    api<MyCustomerProfileResponse>('/auth/me/customer-profile'),
   changePassword: (body: { current_password: string; new_password: string }) =>
     api<{ message: string }>('/auth/me/password', {
       method: 'PATCH',
@@ -211,6 +213,18 @@ export interface PaymentGateway {
   name: string;
   is_active: boolean;
   sort_order: number;
+  /** QR-type: instructions/details for scanning. */
+  qr_details?: string;
+  /** QR-type: bank account details. */
+  bank_details?: string;
+  /** QR-type: URL of uploaded QR image. */
+  qr_image_url?: string;
+  /** eSewa/Khalti: client ID. */
+  client_id?: string;
+  /** eSewa/Khalti: secret key (sensitive). */
+  secret_key?: string;
+  /** eSewa/Khalti: extra config (JSON or other details). */
+  extra_config?: string;
   created_at: string;
   updated_at: string;
 }
@@ -223,10 +237,33 @@ export const paymentGatewaysApi = {
     return api<PaymentGateway[]>(`/payment-gateways${q}`);
   },
   get: (id: string) => api<PaymentGateway>(`/payment-gateways/${id}`),
-  create: (body: { code: string; name: string; is_active?: boolean; sort_order?: number }) =>
-    api<PaymentGateway>('/payment-gateways', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: { code?: string; name?: string; is_active?: boolean; sort_order?: number }) =>
-    api<PaymentGateway>(`/payment-gateways/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  create: (body: {
+    code: string;
+    name: string;
+    is_active?: boolean;
+    sort_order?: number;
+    qr_details?: string;
+    bank_details?: string;
+    qr_image_url?: string;
+    client_id?: string;
+    secret_key?: string;
+    extra_config?: string;
+  }) => api<PaymentGateway>('/payment-gateways', { method: 'POST', body: JSON.stringify(body) }),
+  update: (
+    id: string,
+    body: {
+      code?: string;
+      name?: string;
+      is_active?: boolean;
+      sort_order?: number;
+      qr_details?: string;
+      bank_details?: string;
+      qr_image_url?: string;
+      client_id?: string;
+      secret_key?: string;
+      extra_config?: string;
+    }
+  ) => api<PaymentGateway>(`/payment-gateways/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (id: string) => api<{ message: string }>(`/payment-gateways/${id}`, { method: 'DELETE' }),
 };
 
@@ -1066,6 +1103,8 @@ export interface CreateOrderBody {
   customer_email?: string;
   items: { product_id: string; quantity: number; unit_price: number }[];
   notes?: string;
+  /** Optional: delivery address (e.g. formatted from selected user address). */
+  delivery_address?: string;
   discount_amount?: number;
   promo_code?: string;
   referral_code?: string;
@@ -1163,6 +1202,14 @@ export interface PointsTransaction {
   order_id?: string;
   referral_customer_id?: string;
   created_at: string;
+}
+
+/** End-user profile: referral code, points, membership, earned from purchases (GET /auth/me/customer-profile). */
+export interface MyCustomerProfileResponse {
+  customer?: Customer | null;
+  membership?: { id: string; name: string };
+  points_earned_from_purchases: number;
+  points_transactions?: PointsTransaction[];
 }
 
 export const referralApi = {

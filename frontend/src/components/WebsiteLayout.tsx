@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand } from '@/contexts/BrandContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { resolveImageUrl } from '@/lib/api';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { Pill, ShoppingCart, LogIn, UserPlus, LayoutDashboard, LogOut, Sun, Moon, Facebook, Instagram, Linkedin, User, ChevronDown } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -153,17 +154,30 @@ export default function WebsiteLayout({ children, showCart, onCartClick, cartCou
                     aria-expanded={profileOpen}
                     aria-haspopup="true"
                   >
-                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white ring-2 ring-white/30">
-                      {getInitials(user.name, user.email)}
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white ring-2 ring-white/30 overflow-hidden">
+                      {user.photo_url ? (
+                        <img src={resolveImageUrl(user.photo_url)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        getInitials(user.name, user.email)
+                      )}
                     </div>
                     <span className="hidden sm:block text-white/95 text-sm font-medium truncate max-w-[100px]">{user.name || user.email}</span>
                     <ChevronDown className={`w-4 h-4 text-white/80 shrink-0 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {profileOpen && (
                     <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-theme-border bg-theme-surface shadow-xl py-2 z-50 animate-fade-in" role="menu">
-                      <div className="px-4 py-2.5 border-b border-theme-border">
-                        <p className="text-sm font-semibold text-theme-text truncate">{user.name || t('user')}</p>
-                        <p className="text-xs text-theme-muted truncate mt-0.5">{user.email}</p>
+                      <div className="px-4 py-2.5 border-b border-theme-border flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-theme-bg flex items-center justify-center text-sm font-semibold text-theme-muted shrink-0 overflow-hidden">
+                          {user.photo_url ? (
+                            <img src={resolveImageUrl(user.photo_url)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(user.name, user.email)
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-theme-text truncate">{user.name || t('user')}</p>
+                          <p className="text-xs text-theme-muted truncate mt-0.5">{user.email}</p>
+                        </div>
                       </div>
                       {DASHBOARD_ROLES.includes(user.role) && (
                         <>

@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { authApi, addressesApi, type UserAddress } from '@/lib/api';
+import { authApi, addressesApi, uploadFile, resolveImageUrl, type UserAddress, type MyCustomerProfileResponse } from '@/lib/api';
+import { isBuyerRole } from '@/lib/roles';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   User,
   Save,
@@ -18,14 +20,22 @@ import {
   Eye,
   EyeOff,
   Award,
+  Gift,
+  QrCode,
+  Share2,
+  Copy,
+  Check,
+  Ticket,
+  Camera,
 } from 'lucide-react';
 
-type ProfileSection = 'account' | 'security' | 'addresses';
+type ProfileSection = 'account' | 'security' | 'addresses' | 'rewards';
 
 const SECTION_ICONS: Record<ProfileSection, React.ComponentType<{ className?: string }>> = {
   account: User,
   security: Lock,
   addresses: MapPin,
+  rewards: Gift,
 };
 
 export default function ProfileSettingsPage() {
@@ -68,6 +78,12 @@ export default function ProfileSettingsPage() {
   const [deleteAddressId, setDeleteAddressId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [showPoints, setShowPoints] = useState(true); // eye icon: show/hide points in profile
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [customerProfile, setCustomerProfile] = useState<MyCustomerProfileResponse | null>(null);
+  const [customerProfileLoading, setCustomerProfileLoading] = useState(false);
+  const [referralCopied, setReferralCopied] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   const loadAddresses = async () => {
     try {
@@ -81,8 +97,28 @@ export default function ProfileSettingsPage() {
   };
 
   useEffect(() => {
-    if (user) loadAddresses();
+    if (user) {
+      loadAddresses();
+      setPhone(user.phone ?? '');
+    }
   }, [user]);
+
+  const loadCustomerProfile = useCallback(async () => {
+    if (!isBuyerRole(user?.role)) return;
+    setCustomerProfileLoading(true);
+    try {
+      const data = await authApi.getMyCustomerProfile();
+      setCustomerProfile(data);
+    } catch {
+      setCustomerProfile(null);
+    } finally {
+      setCustomerProfileLoading(false);
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (isBuyerRole(user?.role) && activeSection === 'rewards') loadCustomerProfile();
+  }, [user?.role, activeSection, loadCustomerProfile]);
 
   const resetAddressForm = () => {
     setAddressForm({
@@ -214,14 +250,40 @@ export default function ProfileSettingsPage() {
     setSaving(true);
     setProfileConfirmOpen(false);
     try {
-      const updated = await authApi.updateProfile({ name: name.trim() });
+      const body: { name: string; phone?: string } = { name: name.trim() };
+      if (isBuyerRole(user?.role)) body.phone = phone.trim();
+      const updated = await authApi.updateProfile(body);
       setName(updated.name);
+      setPhone(updated.phone ?? '');
       setSuccess(true);
       await refreshUser();
+      if (isBuyerRole(user?.role)) loadCustomerProfile();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      setPhotoError(t('profile_photo_invalid'));
+      return;
+    }
+    setPhotoError('');
+    setPhotoUploading(true);
+    try {
+      const { url } = await uploadFile(file);
+      await authApi.updateProfile({ photo_url: url });
+      await refreshUser();
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : t('profile_photo_upload_failed'));
+    } finally {
+      setPhotoUploading(false);
+      if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
     }
   };
 
@@ -266,6 +328,7 @@ export default function ProfileSettingsPage() {
 
   const sections: { id: ProfileSection; labelKey: string }[] = [
     { id: 'account', labelKey: 'profile_menu_account' },
+    ...(isBuyerRole(user?.role) ? [{ id: 'rewards' as const, labelKey: 'profile_menu_rewards' }] : []),
     { id: 'security', labelKey: 'profile_menu_security' },
     { id: 'addresses', labelKey: 'profile_menu_addresses' },
   ];
@@ -346,6 +409,48 @@ export default function ProfileSettingsPage() {
                   </h2>
                 </div>
                 <div className="p-6 space-y-5">
+                  {/* Profile picture */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="w-24 h-24 rounded-full bg-theme-bg border-2 border-theme-border overflow-hidden flex items-center justify-center">
+                        {user.photo_url ? (
+                          <img
+                            src={resolveImageUrl(user.photo_url)}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-12 h-12 text-theme-muted" />
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="block text-sm font-medium text-theme-text">{t('profile_photo')}</label>
+                        <input
+                          ref={profilePhotoInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          onChange={handlePhotoChange}
+                          className="hidden"
+                          disabled={photoUploading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => profilePhotoInputRef.current?.click()}
+                          disabled={photoUploading}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-theme-border text-theme-text text-sm font-medium hover:bg-theme-surface-hover transition-colors disabled:opacity-60"
+                        >
+                          <Camera className="w-4 h-4" />
+                          {photoUploading ? t('profile_photo_uploading') : user.photo_url ? t('profile_photo_change') : t('profile_photo_upload')}
+                        </button>
+                      </div>
+                    </div>
+                    {photoError && (
+                      <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                        {photoError}
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-theme-text mb-1">
                       <Mail className="w-4 h-4 text-theme-muted" />
@@ -354,10 +459,12 @@ export default function ProfileSettingsPage() {
                     <p className="text-theme-text pl-6">{user.email}</p>
                     <p className="text-xs text-theme-muted mt-1 pl-6">{t('profile_email_readonly')}</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme-text mb-1.5">{t('auth_role')}</label>
-                    <p className="text-theme-text capitalize pl-6">{user.role}</p>
-                  </div>
+                  {!isBuyerRole(user.role) && (
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text mb-1.5">{t('auth_role')}</label>
+                      <p className="text-theme-text capitalize pl-6">{user.role}</p>
+                    </div>
+                  )}
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-theme-text mb-1">
                       <Award className="w-4 h-4 text-careplus-primary" />
@@ -389,6 +496,19 @@ export default function ProfileSettingsPage() {
                       placeholder={user.name || user.email}
                     />
                   </div>
+                  {isBuyerRole(user.role) && (
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text mb-1.5">{t('profile_phone')}</label>
+                      <input
+                        type="text"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className={inputClass}
+                        placeholder={t('profile_phone_placeholder')}
+                      />
+                      <p className="text-xs text-theme-muted mt-1">{t('profile_phone_hint')}</p>
+                    </div>
+                  )}
                   <button
                     type="submit"
                     disabled={saving}
@@ -734,6 +854,153 @@ export default function ProfileSettingsPage() {
                           <Plus className="w-5 h-5" />
                           {t('profile_add_address')}
                         </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rewards (end-user: referral code, QR, share, points, membership) */}
+          {activeSection === 'rewards' && isBuyerRole(user.role) && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="bg-theme-surface rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-theme-border bg-theme-bg/50">
+                  <h2 className="font-semibold text-theme-text flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-careplus-primary shrink-0" />
+                    {t('profile_rewards_title')}
+                  </h2>
+                  <p className="text-sm text-theme-muted mt-1">{t('profile_rewards_subtitle')}</p>
+                  <p className="text-xs text-theme-muted mt-0.5">{t('profile_rewards_how')}</p>
+                </div>
+                <div className="p-6 space-y-6">
+                  {customerProfileLoading ? (
+                    <p className="text-theme-muted text-sm py-4">{t('profile_loading_rewards')}</p>
+                  ) : !customerProfile?.customer ? (
+                    <div className="text-center py-8 px-4 rounded-xl border border-dashed border-theme-border bg-theme-bg/50">
+                      <Gift className="w-10 h-10 text-theme-muted mx-auto mb-3 opacity-60" />
+                      <p className="text-theme-muted text-sm">{t('profile_rewards_no_customer')}</p>
+                      <p className="text-theme-muted text-xs mt-2">{t('profile_rewards_add_phone')}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="flex flex-col items-center p-4 rounded-xl bg-theme-bg border border-theme-border">
+                          <QrCode className="w-5 h-5 text-careplus-primary mb-2" />
+                          <p className="text-xs font-medium text-theme-muted mb-2">{t('profile_rewards_qr_register')}</p>
+                          <QRCodeSVG
+                            value={`${window.location.origin}/register?ref=${customerProfile.customer.referral_code}`}
+                            size={140}
+                            level="M"
+                            className="rounded-lg"
+                          />
+                        </div>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-theme-muted mb-1">{t('profile_referral_code')}</label>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-lg font-semibold text-theme-text tracking-wider bg-theme-bg px-3 py-2 rounded-lg border border-theme-border">
+                                {customerProfile.customer.referral_code}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await navigator.clipboard.writeText(customerProfile.customer!.referral_code);
+                                  setReferralCopied(true);
+                                  setTimeout(() => setReferralCopied(false), 2000);
+                                }}
+                                className="p-2.5 rounded-lg border border-theme-border text-theme-muted hover:bg-theme-surface-hover hover:text-careplus-primary transition-colors"
+                                title={t('profile_copy_code')}
+                              >
+                                {referralCopied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const url = `${window.location.origin}/register?ref=${customerProfile.customer!.referral_code}`;
+                                const text = t('profile_share_message_register', { code: customerProfile.customer!.referral_code });
+                                if (navigator.share) {
+                                  navigator.share({ title: 'CarePlus', text, url }).catch(() => {});
+                                } else {
+                                  navigator.clipboard.writeText(`${text} ${url}`);
+                                  setReferralCopied(true);
+                                  setTimeout(() => setReferralCopied(false), 2000);
+                                }
+                              }}
+                              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-careplus-primary/50 text-careplus-primary font-medium hover:bg-careplus-primary/10 transition-colors"
+                            >
+                              <Share2 className="w-4 h-4" />
+                              {t('profile_share')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const url = `${window.location.origin}/register?ref=${customerProfile.customer!.referral_code}`;
+                                await navigator.clipboard.writeText(url);
+                                setReferralCopied(true);
+                                setTimeout(() => setReferralCopied(false), 2000);
+                              }}
+                              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-theme-border text-theme-text font-medium hover:bg-theme-surface-hover transition-colors"
+                            >
+                              <Copy className="w-4 h-4" />
+                              {t('profile_copy_register_link')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-theme-bg border border-theme-border">
+                          <p className="text-sm font-medium text-theme-muted">{t('profile_points_balance')}</p>
+                          <p className="text-2xl font-bold text-careplus-primary tabular-nums mt-1">
+                            {showPoints ? customerProfile.customer.points_balance.toLocaleString() : t('profile_points_hidden')}
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-theme-bg border border-theme-border">
+                          <p className="text-sm font-medium text-theme-muted">{t('profile_points_earned_purchases')}</p>
+                          <p className="text-2xl font-bold text-theme-text tabular-nums mt-1">
+                            {showPoints ? customerProfile.points_earned_from_purchases.toLocaleString() : t('profile_points_hidden')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {customerProfile.membership && (
+                        <div className="p-4 rounded-xl bg-careplus-primary/10 border border-careplus-primary/30">
+                          <div className="flex items-center gap-2">
+                            <Ticket className="w-5 h-5 text-careplus-primary shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-theme-muted">{t('profile_membership')}</p>
+                              <p className="font-semibold text-theme-text">{customerProfile.membership.name}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {customerProfile.points_transactions && customerProfile.points_transactions.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-theme-text mb-3">{t('profile_points_history')}</h3>
+                          <ul className="space-y-2 max-h-48 overflow-y-auto">
+                            {customerProfile.points_transactions.slice(0, 15).map((tx) => (
+                              <li
+                                key={tx.id}
+                                className="flex items-center justify-between py-2 px-3 rounded-lg bg-theme-bg border border-theme-border text-sm"
+                              >
+                                <span className="text-theme-muted">
+                                  {tx.type === 'earn_purchase' && t('profile_pts_earn_purchase')}
+                                  {tx.type === 'earn_referral' && t('profile_pts_earn_referral')}
+                                  {tx.type === 'redeem' && t('profile_pts_redeem')}
+                                </span>
+                                <span className={tx.amount >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                                  {tx.amount >= 0 ? '+' : ''}{tx.amount}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
                     </>
                   )}

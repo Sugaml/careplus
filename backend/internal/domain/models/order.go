@@ -35,8 +35,9 @@ type Order struct {
 	PromoCodeID     *uuid.UUID     `gorm:"type:uuid;index" json:"promo_code_id,omitempty"`
 	TotalAmount     float64        `gorm:"type:decimal(12,2);not null" json:"total_amount"`
 	Currency        string         `gorm:"size:10;default:NPR" json:"currency"`
-	Notes           string         `gorm:"type:text" json:"notes"`
-	CreatedBy       uuid.UUID      `gorm:"type:uuid;index" json:"created_by"`
+	Notes             string         `gorm:"type:text" json:"notes"`
+	DeliveryAddress   string         `gorm:"type:text" json:"delivery_address,omitempty"` // snapshot of selected user address at order time
+	CreatedBy         uuid.UUID      `gorm:"type:uuid;index" json:"created_by"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`

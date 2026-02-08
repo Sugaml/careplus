@@ -144,6 +144,36 @@ func (h *ReferralHandler) ListPointsTransactions(c *gin.Context) {
 	c.JSON(http.StatusOK, list)
 }
 
+// GetMyCustomerProfile returns the customer profile for the logged-in user (end-user profile: referral code, points, membership, earned from purchases).
+func (h *ReferralHandler) GetMyCustomerProfile(c *gin.Context) {
+	userIDStr, ok := c.Get("user_id")
+	if !ok || userIDStr == nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Code: errors.ErrCodeUnauthorized, Message: "user_id required"})
+		return
+	}
+	pharmacyIDStr, ok := c.Get("pharmacy_id")
+	if !ok || pharmacyIDStr == nil {
+		c.JSON(http.StatusUnauthorized, response.ErrorResponse{Code: errors.ErrCodeUnauthorized, Message: "pharmacy_id required"})
+		return
+	}
+	userID, err := uuid.Parse(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid user_id"})
+		return
+	}
+	pharmacyID, err := uuid.Parse(pharmacyIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ErrorResponse{Code: errors.ErrCodeValidation, Message: "invalid pharmacy_id"})
+		return
+	}
+	resp, err := h.referralPointsSvc.GetMyCustomerProfile(c.Request.Context(), userID, pharmacyID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ErrorResponse{Code: errors.ErrCodeInternal, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // ComputeRedeemPreview returns the discount and max redeemable for a customer and subtotal (for checkout UI).
 func (h *ReferralHandler) ComputeRedeemPreview(c *gin.Context) {
 	pharmacyIDStr, _ := c.Get("pharmacy_id")

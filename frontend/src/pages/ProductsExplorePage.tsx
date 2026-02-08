@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { publicStoreApi, orderApi, promoCodeApi, resolveImageUrl } from '@/lib/api';
-import type { Product, Pharmacy, Category, CatalogSort, Promo, PaymentGateway } from '@/lib/api';
+import { publicStoreApi, orderApi, promoCodeApi, addressesApi, resolveImageUrl } from '@/lib/api';
+import type { Product, Pharmacy, Category, CatalogSort, Promo, PaymentGateway, UserAddress } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand } from '@/contexts/BrandContext';
 import { useCart } from '@/contexts/CartContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getRecentProductIds } from '@/lib/recentlyViewed';
 import WebsiteLayout from '@/components/WebsiteLayout';
-import { Package, RefreshCw, ChevronLeft, ChevronRight, ChevronsRight, Search, X, Tag, Megaphone, Calendar, ExternalLink, Star, ShoppingCart, ChevronsLeft, Filter, Check, Sparkles } from 'lucide-react';
+import { Package, RefreshCw, ChevronLeft, ChevronRight, ChevronsRight, Search, X, Tag, Megaphone, Calendar, ExternalLink, Star, ShoppingCart, ChevronsLeft, Filter, Check, Sparkles, MapPin } from 'lucide-react';
 
 const STORE_PAGE_SIZE = 12;
 /** Products per category in catalog view (3 rows × 4 cols = 12). */
@@ -24,6 +24,11 @@ function descriptionTextLength(html: string): number {
 function productImageUrl(p: Product): string | undefined {
   const images = p.images ?? [];
   return (images.find((i) => i.is_primary) ?? images[0])?.url;
+}
+
+function formatAddress(a: UserAddress): string {
+  const parts = [a.line1, a.line2, a.city, a.state, a.postal_code, a.country].filter(Boolean);
+  return parts.join(', ');
 }
 
 const SORT_OPTIONS: { value: CatalogSort; labelKey: string }[] = [
@@ -67,13 +72,27 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number } | null>(null);
   const [promoError, setPromoError] = useState('');
   const [applyingPromo, setApplyingPromo] = useState(false);
-  const [referralCodeInput, setReferralCodeInput] = useState('');
+  const [referralCodeInput, setReferralCodeInput] = useState(() => {
+    try {
+      const stored = localStorage.getItem('careplus_referral_ref');
+      if (stored) {
+        localStorage.removeItem('careplus_referral_ref');
+        return stored;
+      }
+    } catch {
+      /* ignore */
+    }
+    return '';
+  });
   const [customerPhone, setCustomerPhone] = useState('');
   const [pointsToRedeem, setPointsToRedeem] = useState<number | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [recentlyViewedProducts, setRecentlyViewedProducts] = useState<Product[]>([]);
   const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([]);
   const [selectedPaymentGatewayId, setSelectedPaymentGatewayId] = useState<string | null>(null);
+  const [addresses, setAddresses] = useState<UserAddress[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [justAddedToCartId, setJustAddedToCartId] = useState<string | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const { user } = useAuth();
@@ -94,6 +113,25 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
   useEffect(() => {
     if (!user && selectedPharmacyId) setPublicPharmacyId(selectedPharmacyId);
   }, [user, selectedPharmacyId, setPublicPharmacyId]);
+
+  useEffect(() => {
+    if (!user) return;
+    setAddressesLoading(true);
+    addressesApi
+      .list()
+      .then((list) => {
+        setAddresses(list);
+        const defaultAddr = list.find((a) => a.is_default) ?? list[0];
+        setSelectedAddressId((prev) => (defaultAddr ? defaultAddr.id : prev ?? null));
+      })
+      .catch(() => setAddresses([]))
+      .finally(() => setAddressesLoading(false));
+  }, [user]);
+
+  // Pre-fill checkout phone from account (primary) when user has one and field is empty
+  useEffect(() => {
+    if (user?.phone && !customerPhone.trim()) setCustomerPhone(user.phone);
+  }, [user?.phone]);
 
   useEffect(() => {
     publicStoreApi
@@ -320,6 +358,9 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
       if (items.length === 0) return;
       setPlacing(true);
       try {
+        const selectedAddr = selectedAddressId ? addresses.find((a) => a.id === selectedAddressId) : null;
+        const deliveryAddressStr = selectedAddr ? formatAddress(selectedAddr) : undefined;
+        const phoneForOrder = (customerPhone.trim() || user?.phone?.trim() || '').trim();
         await orderApi.create({
           items: items.map((i) => ({
             product_id: i.product.id,
@@ -328,7 +369,8 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
           })),
           customer_name: user?.name ?? '',
           customer_email: user?.email ?? '',
-          ...(customerPhone.trim() ? { customer_phone: customerPhone.trim() } : {}),
+          ...(phoneForOrder ? { customer_phone: phoneForOrder } : {}),
+          ...(deliveryAddressStr ? { delivery_address: deliveryAddressStr } : {}),
           ...(appliedPromo ? { promo_code: appliedPromo.code } : {}),
           ...(referralCodeInput.trim() ? { referral_code: referralCodeInput.trim() } : {}),
           ...(pointsToRedeem != null && pointsToRedeem > 0 ? { points_to_redeem: pointsToRedeem } : {}),
@@ -1128,10 +1170,52 @@ export default function ProductsExplorePage({ embedded = false }: ProductsExplor
                     <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Code applied: NPR {appliedPromo.discountAmount.toFixed(2)} off</p>
                   )}
                   <div>
-                    <label className="text-sm text-theme-muted block mb-1">Phone (for points & referral)</label>
+                    <label className="text-sm font-medium text-theme-text flex items-center gap-1.5 mb-2">
+                      <MapPin className="w-4 h-4 text-careplus-primary shrink-0" />
+                      {t('checkout_delivery_address')}
+                    </label>
+                    {addressesLoading ? (
+                      <p className="text-xs text-theme-muted py-2">{t('profile_loading_addresses')}</p>
+                    ) : addresses.length === 0 ? (
+                      <p className="text-xs text-theme-muted py-2">{t('checkout_no_addresses')}</p>
+                    ) : (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {addresses.map((addr) => (
+                          <label
+                            key={addr.id}
+                            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                              selectedAddressId === addr.id
+                                ? 'border-careplus-primary bg-careplus-primary/10'
+                                : 'border-theme-border hover:bg-theme-bg'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="delivery-address"
+                              value={addr.id}
+                              checked={selectedAddressId === addr.id}
+                              onChange={() => setSelectedAddressId(addr.id)}
+                              className="mt-1 rounded-full border-theme-border text-careplus-primary focus:ring-careplus-primary"
+                            />
+                            <div className="min-w-0 flex-1">
+                              {addr.label && (
+                                <span className="text-sm font-medium text-theme-text block">{addr.label}</span>
+                              )}
+                              <p className="text-xs text-theme-muted mt-0.5">{formatAddress(addr)}</p>
+                              {addr.is_default && (
+                                <span className="inline-block mt-1 text-[10px] font-medium text-careplus-primary">{t('profile_default')}</span>
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm text-theme-muted block mb-1">{t('checkout_phone_label')}</label>
                     <input
                       type="text"
-                      placeholder="Phone number"
+                      placeholder={t('checkout_phone_placeholder')}
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       className="w-full bg-theme-input-bg border border-theme-input-border rounded-xl px-3 py-2.5 text-sm text-theme-text focus:ring-2 focus:ring-careplus-primary/30"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi, ApiError, publicStoreApi } from '@/lib/api';
 import type { Pharmacy } from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -19,6 +19,12 @@ export default function RegisterPage() {
   const [loadingPharmacy, setLoadingPharmacy] = useState(true);
   const { t, locale } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get('ref')?.trim();
+
+  useEffect(() => {
+    if (refCode) localStorage.setItem('careplus_referral_ref', refCode);
+  }, [refCode]);
 
   useEffect(() => {
     publicStoreApi
@@ -71,6 +77,11 @@ export default function RegisterPage() {
           <p className="text-sm text-gray-500 mb-6">
             {t('auth_register_subtitle')}
           </p>
+          {refCode && (
+            <div className="mb-4 p-3 rounded-lg bg-careplus-primary/10 border border-careplus-primary/30 text-sm text-theme-text">
+              {t('auth_referred_by_friend')}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>

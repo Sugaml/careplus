@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation, Link, Navigate } from 'react
 import { useAuth } from '@/contexts/AuthContext';
 import { useBrand } from '@/contexts/BrandContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { resolveImageUrl } from '@/lib/api';
 import { isBuyerAllowedPath, ROLE_STAFF } from '@/lib/roles';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import {
@@ -322,8 +323,12 @@ export default function Layout() {
         {/* Sidebar footer: user summary */}
         <div className="p-3 border-t border-white/10">
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg bg-white/5">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white shrink-0 ring-2 ring-white/30">
-              {user ? getInitials(user.name, user.email) : '?'}
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-sm font-semibold text-white shrink-0 ring-2 ring-white/30 overflow-hidden">
+              {user?.photo_url ? (
+                <img src={resolveImageUrl(user.photo_url)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                user ? getInitials(user.name, user.email) : '?'
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-white truncate">{user?.name || t('user')}</p>
@@ -416,8 +421,12 @@ export default function Layout() {
               aria-expanded={profileOpen}
               aria-haspopup="true"
             >
-              <div className="w-9 h-9 rounded-full bg-careplus-primary text-theme-text-inverse flex items-center justify-center text-sm font-semibold ring-2 ring-theme-border">
-                {user ? getInitials(user.name, user.email) : '?'}
+              <div className="w-9 h-9 rounded-full bg-careplus-primary text-theme-text-inverse flex items-center justify-center text-sm font-semibold ring-2 ring-theme-border overflow-hidden shrink-0">
+                {user?.photo_url ? (
+                  <img src={resolveImageUrl(user.photo_url)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  user ? getInitials(user.name, user.email) : '?'
+                )}
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium text-theme-text truncate max-w-[140px]">
@@ -434,11 +443,20 @@ export default function Layout() {
                 className="absolute right-0 top-full mt-2 w-64 rounded-2xl border border-theme-border bg-theme-surface shadow-xl py-2 z-50 animate-fade-in"
                 role="menu"
               >
-                <div className="px-4 py-3 border-b border-theme-border">
-                  <p className="text-sm font-semibold text-theme-text truncate">
-                    {user?.name || t('user')}
-                  </p>
-                  <p className="text-xs text-theme-muted truncate mt-0.5">{user?.email}</p>
+                <div className="px-4 py-3 border-b border-theme-border flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-theme-bg flex items-center justify-center text-sm font-semibold text-theme-muted shrink-0 overflow-hidden">
+                    {user?.photo_url ? (
+                      <img src={resolveImageUrl(user.photo_url)} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      user ? getInitials(user.name, user.email) : '?'
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-theme-text truncate">
+                      {user?.name || t('user')}
+                    </p>
+                    <p className="text-xs text-theme-muted truncate mt-0.5">{user?.email}</p>
+                  </div>
                 </div>
                 <Link
                   to="/profile"

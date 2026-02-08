@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { configApi, referralApi, paymentGatewaysApi, type PharmacyConfig, type ReferralPointsConfig, type PaymentGateway } from '@/lib/api';
+import { configApi, referralApi, paymentGatewaysApi, uploadFile, resolveImageUrl, type PharmacyConfig, type ReferralPointsConfig, type PaymentGateway } from '@/lib/api';
 import { useBrand } from '@/contexts/BrandContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Loader from '@/components/Loader';
@@ -58,10 +58,22 @@ export default function ConfigPage() {
   const [referralSaveConfirmOpen, setReferralSaveConfirmOpen] = useState(false);
   const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([]);
   const [paymentGatewaysLoading, setPaymentGatewaysLoading] = useState(true);
-  const [paymentGatewayForm, setPaymentGatewayForm] = useState<{ code: string; name: string; is_active: boolean; sort_order: number } | null>(null);
+  const [paymentGatewayForm, setPaymentGatewayForm] = useState<{
+    code: string;
+    name: string;
+    is_active: boolean;
+    sort_order: number;
+    qr_details?: string;
+    bank_details?: string;
+    qr_image_url?: string;
+    client_id?: string;
+    secret_key?: string;
+    extra_config?: string;
+  } | null>(null);
   const [editingGatewayId, setEditingGatewayId] = useState<string | null>(null);
   const [gatewaySaving, setGatewaySaving] = useState(false);
   const [gatewayError, setGatewayError] = useState('');
+  const [qrImageUploading, setQrImageUploading] = useState(false);
   const [activeSection, setActiveSection] = useState<ConfigSectionId>('company');
 
   const loadConfig = useCallback(() => {
@@ -632,6 +644,12 @@ export default function ConfigPage() {
                             name: gw.name,
                             is_active: gw.is_active,
                             sort_order: gw.sort_order,
+                            qr_details: gw.qr_details ?? '',
+                            bank_details: gw.bank_details ?? '',
+                            qr_image_url: gw.qr_image_url ?? '',
+                            client_id: gw.client_id ?? '',
+                            secret_key: gw.secret_key ?? '',
+                            extra_config: gw.extra_config ?? '',
                           });
                         }}
                         className="p-1.5 rounded text-gray-500 hover:bg-gray-100 hover:text-careplus-primary"
@@ -684,6 +702,140 @@ export default function ConfigPage() {
                         />
                         <span className="text-sm">Active (show at checkout)</span>
                       </label>
+                      {(paymentGatewayForm.code === 'esewa' || paymentGatewayForm.code === 'khalti') && (
+                        <div className="space-y-3 pt-2 border-t border-gray-200">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Client ID</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. from eSewa/Khalti merchant dashboard"
+                              value={paymentGatewayForm.client_id ?? ''}
+                              onChange={(e) =>
+                                setPaymentGatewayForm((p) => (p ? { ...p, client_id: e.target.value } : null))
+                              }
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Secret key</label>
+                            <input
+                              type="password"
+                              placeholder="Keep confidential"
+                              value={paymentGatewayForm.secret_key ?? ''}
+                              onChange={(e) =>
+                                setPaymentGatewayForm((p) => (p ? { ...p, secret_key: e.target.value } : null))
+                              }
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Other details</label>
+                            <textarea
+                              placeholder="API URL, callback URL, environment, or other config (one per line or JSON)"
+                              value={paymentGatewayForm.extra_config ?? ''}
+                              onChange={(e) =>
+                                setPaymentGatewayForm((p) => (p ? { ...p, extra_config: e.target.value } : null))
+                              }
+                              rows={3}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {paymentGatewayForm.code === 'qr' && (
+                        <div className="space-y-3 pt-2 border-t border-gray-200">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">QR details</label>
+                            <textarea
+                              placeholder="Instructions or details for scanning the QR"
+                              value={paymentGatewayForm.qr_details ?? ''}
+                              onChange={(e) =>
+                                setPaymentGatewayForm((p) => (p ? { ...p, qr_details: e.target.value } : null))
+                              }
+                              rows={2}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Bank details</label>
+                            <textarea
+                              placeholder="Bank name, account number, etc."
+                              value={paymentGatewayForm.bank_details ?? ''}
+                              onChange={(e) =>
+                                setPaymentGatewayForm((p) => (p ? { ...p, bank_details: e.target.value } : null))
+                              }
+                              rows={2}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">QR image</label>
+                            {paymentGatewayForm.qr_image_url ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <img
+                                  src={resolveImageUrl(paymentGatewayForm.qr_image_url)}
+                                  alt="QR"
+                                  className="h-20 w-20 object-contain border border-gray-200 rounded"
+                                />
+                                <div className="flex gap-2">
+                                  <label className="cursor-pointer px-3 py-1.5 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50">
+                                    {qrImageUploading ? 'Uploading…' : 'Change'}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="sr-only"
+                                      disabled={qrImageUploading}
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file || !paymentGatewayForm) return;
+                                        setQrImageUploading(true);
+                                        try {
+                                          const { url } = await uploadFile(file);
+                                          setPaymentGatewayForm((p) => (p ? { ...p, qr_image_url: url } : null));
+                                        } finally {
+                                          setQrImageUploading(false);
+                                          e.target.value = '';
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPaymentGatewayForm((p) => (p ? { ...p, qr_image_url: '' } : null))
+                                    }
+                                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm cursor-pointer hover:bg-gray-50">
+                                {qrImageUploading ? 'Uploading…' : 'Upload QR image'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="sr-only"
+                                  disabled={qrImageUploading}
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file || !paymentGatewayForm) return;
+                                    setQrImageUploading(true);
+                                    try {
+                                      const { url } = await uploadFile(file);
+                                      setPaymentGatewayForm((p) => (p ? { ...p, qr_image_url: url } : null));
+                                    } finally {
+                                      setQrImageUploading(false);
+                                      e.target.value = '';
+                                    }
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -696,6 +848,20 @@ export default function ConfigPage() {
                                 name: paymentGatewayForm.name,
                                 is_active: paymentGatewayForm.is_active,
                                 sort_order: paymentGatewayForm.sort_order,
+                                ...(paymentGatewayForm.code === 'qr'
+                                  ? {
+                                      qr_details: paymentGatewayForm.qr_details ?? '',
+                                      bank_details: paymentGatewayForm.bank_details ?? '',
+                                      qr_image_url: paymentGatewayForm.qr_image_url ?? '',
+                                    }
+                                  : {}),
+                                ...(paymentGatewayForm.code === 'esewa' || paymentGatewayForm.code === 'khalti'
+                                  ? {
+                                      client_id: paymentGatewayForm.client_id ?? '',
+                                      secret_key: paymentGatewayForm.secret_key ?? '',
+                                      extra_config: paymentGatewayForm.extra_config ?? '',
+                                    }
+                                  : {}),
                               });
                               loadPaymentGateways();
                               setEditingGatewayId(null);
@@ -746,6 +912,12 @@ export default function ConfigPage() {
                             name: code === 'other' ? '' : optionText,
                             is_active: true,
                             sort_order: paymentGatewayForm?.sort_order ?? paymentGateways.length,
+                            qr_details: code === 'qr' ? paymentGatewayForm?.qr_details ?? '' : undefined,
+                            bank_details: code === 'qr' ? paymentGatewayForm?.bank_details ?? '' : undefined,
+                            qr_image_url: code === 'qr' ? paymentGatewayForm?.qr_image_url ?? '' : undefined,
+                            client_id: code === 'esewa' || code === 'khalti' ? paymentGatewayForm?.client_id ?? '' : undefined,
+                            secret_key: code === 'esewa' || code === 'khalti' ? paymentGatewayForm?.secret_key ?? '' : undefined,
+                            extra_config: code === 'esewa' || code === 'khalti' ? paymentGatewayForm?.extra_config ?? '' : undefined,
                           });
                         }}
                         className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
@@ -771,6 +943,140 @@ export default function ConfigPage() {
                         className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       />
                     </div>
+                    {(paymentGatewayForm?.code === 'esewa' || paymentGatewayForm?.code === 'khalti') && (
+                      <div className="w-full space-y-3 border-t border-gray-200 pt-3 mt-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Client ID</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. from eSewa/Khalti merchant dashboard"
+                            value={paymentGatewayForm.client_id ?? ''}
+                            onChange={(e) =>
+                              setPaymentGatewayForm((p) => (p ? { ...p, client_id: e.target.value } : null))
+                            }
+                            className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Secret key</label>
+                          <input
+                            type="password"
+                            placeholder="Keep confidential"
+                            value={paymentGatewayForm.secret_key ?? ''}
+                            onChange={(e) =>
+                              setPaymentGatewayForm((p) => (p ? { ...p, secret_key: e.target.value } : null))
+                            }
+                            className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Other details</label>
+                          <textarea
+                            placeholder="API URL, callback URL, environment, or other config (one per line or JSON)"
+                            value={paymentGatewayForm.extra_config ?? ''}
+                            onChange={(e) =>
+                              setPaymentGatewayForm((p) => (p ? { ...p, extra_config: e.target.value } : null))
+                            }
+                            rows={3}
+                            className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {paymentGatewayForm?.code === 'qr' && (
+                      <div className="w-full space-y-3 border-t border-gray-200 pt-3 mt-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">QR details</label>
+                          <textarea
+                            placeholder="Instructions or details for scanning the QR"
+                            value={paymentGatewayForm.qr_details ?? ''}
+                            onChange={(e) =>
+                              setPaymentGatewayForm((p) => (p ? { ...p, qr_details: e.target.value } : null))
+                            }
+                            rows={2}
+                            className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Bank details</label>
+                          <textarea
+                            placeholder="Bank name, account number, etc."
+                            value={paymentGatewayForm.bank_details ?? ''}
+                            onChange={(e) =>
+                              setPaymentGatewayForm((p) => (p ? { ...p, bank_details: e.target.value } : null))
+                            }
+                            rows={2}
+                            className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">QR image</label>
+                          {paymentGatewayForm.qr_image_url ? (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <img
+                                src={resolveImageUrl(paymentGatewayForm.qr_image_url)}
+                                alt="QR"
+                                className="h-20 w-20 object-contain border border-gray-200 rounded"
+                              />
+                              <div className="flex gap-2">
+                                <label className="cursor-pointer px-3 py-1.5 bg-gray-100 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50">
+                                  {qrImageUploading ? 'Uploading…' : 'Change'}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="sr-only"
+                                    disabled={qrImageUploading}
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      setQrImageUploading(true);
+                                      try {
+                                        const { url } = await uploadFile(file);
+                                        setPaymentGatewayForm((p) => (p ? { ...p, qr_image_url: url } : null));
+                                      } finally {
+                                        setQrImageUploading(false);
+                                        e.target.value = '';
+                                      }
+                                    }}
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPaymentGatewayForm((p) => (p ? { ...p, qr_image_url: '' } : null))
+                                  }
+                                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm cursor-pointer hover:bg-gray-50">
+                              {qrImageUploading ? 'Uploading…' : 'Upload QR image'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                disabled={qrImageUploading}
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  setQrImageUploading(true);
+                                  try {
+                                    const { url } = await uploadFile(file);
+                                    setPaymentGatewayForm((p) => (p ? { ...p, qr_image_url: url } : null));
+                                  } finally {
+                                    setQrImageUploading(false);
+                                    e.target.value = '';
+                                  }
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={async () => {
@@ -783,6 +1089,20 @@ export default function ConfigPage() {
                             name: paymentGatewayForm.name.trim(),
                             is_active: paymentGatewayForm.is_active,
                             sort_order: paymentGatewayForm.sort_order,
+                            ...(paymentGatewayForm.code === 'qr'
+                              ? {
+                                  qr_details: paymentGatewayForm.qr_details ?? '',
+                                  bank_details: paymentGatewayForm.bank_details ?? '',
+                                  qr_image_url: paymentGatewayForm.qr_image_url ?? '',
+                                }
+                              : {}),
+                            ...(paymentGatewayForm.code === 'esewa' || paymentGatewayForm.code === 'khalti'
+                              ? {
+                                  client_id: paymentGatewayForm.client_id ?? '',
+                                  secret_key: paymentGatewayForm.secret_key ?? '',
+                                  extra_config: paymentGatewayForm.extra_config ?? '',
+                                }
+                              : {}),
                           });
                           loadPaymentGateways();
                           setPaymentGatewayForm(null);
